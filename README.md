@@ -1,42 +1,20 @@
-# Mupen64Plus-Next
+# libgarbagefiar
 
-Mupen64Plus-Next is a N64 emulation library for the [libretro API](http://www.libretro.com/), based on Mupen64Plus (see below).
+![garbagefire](https://user-images.githubusercontent.com/56025978/170892431-f2e70f44-1a40-4dc6-975d-0a89d00a8589.png)
 
-It is also the successor of the old Mupen64Plus libretro core.
+**General use by anyone is not recommended. At all. Use other libretro cores and N64 emulators.**
 
-> You can *always* rely on it to give you an excellent Majora's Mask experience. Seriously.
+## What?
 
-#### How is this different from any N64 libretro-core, ever?
+Personal N64 emulator code playset for anything with:
 
-Due to the amount of libraries that are used and are in regular need of maintenance, I have strict rules about adding dependencies.  
-This allows for easy maintenance, so available time can be spent on useful improvements and lowers the burden.  
-By default the experience will be very simliar to the N64 emulators you know and love with *a lot extra*.
+* **x86 CPUs w/SSE4.2+ 4 threads and above**.
+* **ARM+NEON supporting CPUs around RPI4 level and above**.
+* **Win7 and above**/modern Linux
+* **Modern GCC/G++ with C++17 support**
 
-> **Sidenote:**  
-While I accept pretty much every reasonable contribution, hacks must not impact behavior by default, unless justified.  
-If you need to add a dependency, please consult me first.  
-Force-pushes on all branches but `develop` and `master` are fair game.
-`master` has the best stability memes, if that's your *thing*.
+## How?
 
-#### Used Technologies
+Making a massive garbage fire by modding mupen64plus-next/parallel-n64.
 
-The following projects have been incorporated into this repository:
-
-- [mupen64plus](https://github.com/mupen64plus/mupen64plus-core)
-- [GLideN64](https://github.com/gonetz/GLideN64)
-- [cxd4](https://github.com/cxd4/rsp)
-- [parallel-rsp](https://github.com/Themaister/parallel-rsp)
-- [angrylion-rdp-plus](https://github.com/ata4/angrylion-rdp-plus) (Currently based on it's [ParaLLel](https://github.com/libretro/parallel-n64/) variant)
-
-#### Acknowledgments
-
-A special thanks to:
-
-- The Mupen64Plus Team, especially Gillou68310
-- gonetz and those that have worked on GLideN64, especially fzurita
-- The Authors of cxd4 and angrylion-rdp-plus (ata4)
-- themaister for parallel-rsp and parallel-rdp (including the Vulkan integration)
-- Everyone in the libretro Team
-
-
-\- m4xw
+Lets see where it goes from here...
