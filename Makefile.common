@@ -1,0 +1,138 @@
+CORE_DIR           = $(ROOT_DIR)/mupen64plus-core
+LIBRETRO_COMM_DIR  = $(ROOT_DIR)/libretro-common
+AUDIO_LIBRETRO_DIR = $(ROOT_DIR)/custom/mupen64plus-core/plugin/audio_libretro
+
+DYNAREC_USED := 0
+
+INCFLAGS += \
+	-I$(ROOT_DIR)/custom \
+	-I$(ROOT_DIR)/custom/mupen64plus-core \
+	-I$(ROOT_DIR)/custom/android/include \
+	-I$(ROOT_DIR)/custom/dependencies \
+	-I$(ROOT_DIR)/custom/dependencies/osal \
+	-I$(CORE_DIR)/src \
+	-I$(CORE_DIR)/src/api \
+	-I$(AUDIO_LIBRETRO_DIR) \
+	-I$(LIBRETRO_COMM_DIR)/include \
+	-I$(LIBRETRO_DIR) \
+
+ifneq (,$(findstring win,$(platform)))
+	INCFLAGS += -I$(ROOT_DIR)/custom/mman-win32
+endif
+
+SOURCES_C = \
+	$(CORE_DIR)/src/api/callbacks.c \
+	$(ROOT_DIR)/custom/mupen64plus-core/api/config.c \
+	$(CORE_DIR)/src/api/frontend.c \
+	$(CORE_DIR)/src/backends/plugins_compat/audio_plugin_compat.c \
+	$(CORE_DIR)/src/backends/api/video_capture_backend.c \
+	$(CORE_DIR)/src/backends/plugins_compat/input_plugin_compat.c \
+	$(CORE_DIR)/src/backends/clock_ctime_plus_delta.c \
+	$(CORE_DIR)/src/backends/dummy_video_capture.c \
+	$(CORE_DIR)/src/backends/file_storage.c \
+	$(CORE_DIR)/src/device/cart/cart.c \
+	$(CORE_DIR)/src/device/cart/af_rtc.c \
+	$(CORE_DIR)/src/device/cart/cart_rom.c \
+	$(CORE_DIR)/src/device/cart/eeprom.c \
+	$(CORE_DIR)/src/device/cart/flashram.c \
+	$(CORE_DIR)/src/device/cart/is_viewer.c \
+	$(CORE_DIR)/src/device/cart/sram.c \
+	$(CORE_DIR)/src/device/controllers/game_controller.c \
+	$(CORE_DIR)/src/device/controllers/paks/biopak.c \
+	$(CORE_DIR)/src/device/controllers/paks/mempak.c \
+	$(CORE_DIR)/src/device/controllers/paks/rumblepak.c \
+	$(CORE_DIR)/src/device/controllers/paks/transferpak.c \
+	$(CORE_DIR)/src/device/dd_controller.c \
+	$(CORE_DIR)/src/device/disk.c \
+	$(CORE_DIR)/src/device/device.c \
+	$(CORE_DIR)/src/device/gb/gb_cart.c \
+	$(CORE_DIR)/src/device/gb/mbc3_rtc.c \
+	$(CORE_DIR)/src/device/gb/m64282fp.c \
+	$(CORE_DIR)/src/device/memory.c \
+	$(CORE_DIR)/src/device/pif/bootrom_hle.c \
+	$(CORE_DIR)/src/device/pif/cic.c \
+	$(CORE_DIR)/src/device/pif/n64_cic_nus_6105.c \
+	$(CORE_DIR)/src/device/pif/pif.c \
+	$(CORE_DIR)/src/device/r4300/cp0.c \
+	$(CORE_DIR)/src/device/r4300/cp1.c \
+	$(CORE_DIR)/src/device/r4300/idec.c \
+	$(CORE_DIR)/src/device/r4300/interrupt.c \
+	$(CORE_DIR)/src/device/r4300/pure_interp.c \
+	$(CORE_DIR)/src/device/r4300/r4300_core.c \
+	$(CORE_DIR)/src/device/r4300/tlb.c \
+	$(CORE_DIR)/src/device/rcp/ai_controller.c \
+	$(CORE_DIR)/src/device/rcp/mi_controller.c \
+	$(CORE_DIR)/src/device/rcp/pi_controller.c \
+	$(CORE_DIR)/src/device/rcp/rdp/fb.c \
+	$(CORE_DIR)/src/device/rcp/rdp/rdp_core.c \
+	$(CORE_DIR)/src/device/rcp/ri_controller.c \
+	$(CORE_DIR)/src/device/rcp/rsp/rsp_core.c \
+	$(CORE_DIR)/src/device/rcp/si_controller.c \
+	$(CORE_DIR)/src/device/rcp/rdp/vi_controller.c \
+	$(CORE_DIR)/src/device/rdram.c \
+	$(CORE_DIR)/src/main/main.c \
+	$(CORE_DIR)/src/main/util.c \
+	$(CORE_DIR)/src/main/rom.c \
+	$(CORE_DIR)/src/main/savestates.c \
+	$(CORE_DIR)/src/plugin/plugin.c \
+	$(CORE_DIR)/src/plugin/dummy_audio.c \
+	$(CORE_DIR)/src/plugin/dummy_input.c
+
+
+
+# MD5 lib
+SOURCES_C += \
+	$(ROOT_DIR)/custom/dependencies/md5.c
+COREFLAGS += -I$(ROOT_DIR)/custom/dependencies/md5
+
+
+ifneq (,$(findstring win,$(platform)))
+	SOURCES_C += $(ROOT_DIR)/custom/dependencies/osal/osal_files_win32.c
+else
+	SOURCES_C += $(ROOT_DIR)/custom/dependencies/osal/osal_files_unix.c
+endif
+
+
+# Libretro
+SOURCES_C += $(LIBRETRO_DIR)/libretro.c \
+	$(LIBRETRO_COMM_DIR)/memmap/memalign.c \
+	$(ROOT_DIR)/custom/mupen64plus-core/plugin/emulate_game_controller_via_libretro.c \
+	$(LIBRETRO_COMM_DIR)/audio/resampler/drivers/sinc_resampler.c \
+	$(LIBRETRO_COMM_DIR)/audio/resampler/drivers/nearest_resampler.c \
+	$(LIBRETRO_COMM_DIR)/audio/resampler/audio_resampler.c \
+	$(AUDIO_LIBRETRO_DIR)/audio_backend_libretro.c \
+	$(LIBRETRO_COMM_DIR)/file/config_file.c \
+	$(LIBRETRO_COMM_DIR)/file/config_file_userdata.c \
+	$(LIBRETRO_COMM_DIR)/file/file_path.c \
+	$(LIBRETRO_COMM_DIR)/file/file_path_io.c \
+	$(LIBRETRO_COMM_DIR)/time/rtime.c \
+	$(LIBRETRO_COMM_DIR)/compat/compat_strl.c \
+	$(LIBRETRO_COMM_DIR)/compat/compat_posix_string.c \
+	$(LIBRETRO_COMM_DIR)/compat/compat_strcasestr.c \
+	$(LIBRETRO_COMM_DIR)/audio/conversion/float_to_s16.c \
+	$(LIBRETRO_COMM_DIR)/audio/conversion/s16_to_float.c \
+	$(LIBRETRO_COMM_DIR)/features/features_cpu.c \
+	$(LIBRETRO_COMM_DIR)/lists/string_list.c \
+	$(LIBRETRO_COMM_DIR)/encodings/encoding_utf.c \
+	$(LIBRETRO_COMM_DIR)/string/stdstring.c \
+	$(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c \
+	$(LIBRETRO_COMM_DIR)/streams/file_stream.c \
+	$(LIBRETRO_COMM_DIR)/compat/fopen_utf8.c \
+	$(ROOT_DIR)/custom/mupen64plus-core/api/vidext_libretro.c \
+
+
+CFLAGS      += -DHAVE_THR_AL
+CXXFLAGS    += -DHAVE_THR_AL
+### Angrylion's renderer ###
+SOURCES_CXX += $(CORE_DIR)/src/device/rcp/rdp/al/parallel_al.cpp
+SOURCES_C   += $(CORE_DIR)/src/device/rcp/rdp/al/interface.c \
+				   $(CORE_DIR)/src/device/rcp/rdp/al/n64video.c
+
+
+SOURCES_C += $(CORE_DIR)/src/device/rcp/rsp/cxd4/rsp.c
+
+ifeq ($(HAVE_NEON),1)
+	SOURCES_ASM += $(LIBRETRO_COMM_DIR)/audio/conversion/float_to_s16_neon.S \
+						$(LIBRETRO_COMM_DIR)/audio/conversion/s16_to_float_neon.S \
+						$(LIBRETRO_COMM_DIR)/audio/resampler/drivers/sinc_resampler_neon.S
+endif
