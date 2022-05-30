@@ -1,5 +1,5 @@
 CORE_DIR           = $(ROOT_DIR)
-LIBRETRO_COMM_DIR  = $(ROOT_DIR)/libretro-common
+LIBRETRO_COMM_DIR  = $(ROOT_DIR)/deps/libretro-common
 
 DYNAREC_USED := 0
 
@@ -10,7 +10,6 @@ INCFLAGS += \
 	-I$(CORE_DIR)/src \
 	-I$(CORE_DIR)/src/api \
 	-I$(LIBRETRO_COMM_DIR)/include \
-	-I$(LIBRETRO_DIR) \
 
 ifneq (,$(findstring win,$(platform)))
 	INCFLAGS += -I$(ROOT_DIR)/custom/mman-win32
@@ -88,7 +87,7 @@ endif
 
 
 # Libretro
-SOURCES_C += $(LIBRETRO_DIR)/libretro.c \
+SOURCES_C += $(ROOT_DIR)/src/libretro.c \
 	$(LIBRETRO_COMM_DIR)/memmap/memalign.c \
 	$(ROOT_DIR)/src/plugin/emulate_game_controller_via_libretro.c \
 	$(LIBRETRO_COMM_DIR)/audio/resampler/drivers/sinc_resampler.c \
