@@ -406,3 +406,16 @@ uint32_t egcvip_get_input(void* opaque)
     return keys.Value;
 
 }
+
+void dummyinput_SDL_KeyDown(int keymod, int keysym)
+{
+}
+
+void dummyinput_SDL_KeyUp(int keymod, int keysym)
+{
+}
+
+void dummyinput_RenderCallback(void)
+{
+}
+

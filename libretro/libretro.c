@@ -51,8 +51,6 @@
 #include "device/pif/pif.h"
 #include "libretro_memory.h"
 
-#include "audio_plugin.h"
-
 #ifndef PRESCALE_WIDTH
 #define PRESCALE_WIDTH  640
 #endif
@@ -683,8 +681,6 @@ void update_variables(bool startup)
 {
     if (startup)
     {     
-      plugin_connect_rdp_api(RDP_PLUGIN_ANGRYLION);
-      plugin_connect_rsp_api(RSP_PLUGIN_CXD4);
 
     EnableFrameDuping = 1;
       EnableFullspeed = 0;

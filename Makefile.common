@@ -1,18 +1,14 @@
 CORE_DIR           = $(ROOT_DIR)
 LIBRETRO_COMM_DIR  = $(ROOT_DIR)/libretro-common
-AUDIO_LIBRETRO_DIR = $(ROOT_DIR)/custom/mupen64plus-core/plugin/audio_libretro
 
 DYNAREC_USED := 0
 
 INCFLAGS += \
+	-I$(ROOT_DIR)/deps \
 	-I$(ROOT_DIR)/custom \
-	-I$(ROOT_DIR)/custom/mupen64plus-core \
-	-I$(ROOT_DIR)/custom/android/include \
-	-I$(ROOT_DIR)/custom/dependencies \
-	-I$(ROOT_DIR)/custom/dependencies/osal \
+	-I$(ROOT_DIR)/custom/osal \
 	-I$(CORE_DIR)/src \
 	-I$(CORE_DIR)/src/api \
-	-I$(AUDIO_LIBRETRO_DIR) \
 	-I$(LIBRETRO_COMM_DIR)/include \
 	-I$(LIBRETRO_DIR) \
 
@@ -22,7 +18,7 @@ endif
 
 SOURCES_C = \
 	$(CORE_DIR)/src/api/callbacks.c \
-	$(ROOT_DIR)/custom/mupen64plus-core/api/config.c \
+	$(ROOT_DIR)/src/api/config.c \
 	$(CORE_DIR)/src/api/frontend.c \
 	$(CORE_DIR)/src/backends/plugins_compat/audio_plugin_compat.c \
 	$(CORE_DIR)/src/backends/api/video_capture_backend.c \
@@ -74,33 +70,31 @@ SOURCES_C = \
 	$(CORE_DIR)/src/main/util.c \
 	$(CORE_DIR)/src/main/rom.c \
 	$(CORE_DIR)/src/main/savestates.c \
-	$(CORE_DIR)/src/plugin/plugin.c \
-	$(CORE_DIR)/src/plugin/dummy_audio.c \
-	$(CORE_DIR)/src/plugin/dummy_input.c
+	$(CORE_DIR)/src/plugin/plugin.c 
 
 
 
 # MD5 lib
 SOURCES_C += \
-	$(ROOT_DIR)/custom/dependencies/md5.c
-COREFLAGS += -I$(ROOT_DIR)/custom/dependencies/md5
+	$(ROOT_DIR)/deps/md5.c
+COREFLAGS += -I$(ROOT_DIR)/deps/md5
 
 
 ifneq (,$(findstring win,$(platform)))
-	SOURCES_C += $(ROOT_DIR)/custom/dependencies/osal/osal_files_win32.c
+	SOURCES_C += $(ROOT_DIR)/custom/osal/osal_files_win32.c
 else
-	SOURCES_C += $(ROOT_DIR)/custom/dependencies/osal/osal_files_unix.c
+	SOURCES_C += $(ROOT_DIR)/custom/osal/osal_files_unix.c
 endif
 
 
 # Libretro
 SOURCES_C += $(LIBRETRO_DIR)/libretro.c \
 	$(LIBRETRO_COMM_DIR)/memmap/memalign.c \
-	$(ROOT_DIR)/custom/mupen64plus-core/plugin/emulate_game_controller_via_libretro.c \
+	$(ROOT_DIR)/src/plugin/emulate_game_controller_via_libretro.c \
 	$(LIBRETRO_COMM_DIR)/audio/resampler/drivers/sinc_resampler.c \
 	$(LIBRETRO_COMM_DIR)/audio/resampler/drivers/nearest_resampler.c \
 	$(LIBRETRO_COMM_DIR)/audio/resampler/audio_resampler.c \
-	$(AUDIO_LIBRETRO_DIR)/audio_backend_libretro.c \
+	$(ROOT_DIR)/src/plugin/audio_backend_libretro.c \
 	$(LIBRETRO_COMM_DIR)/file/config_file.c \
 	$(LIBRETRO_COMM_DIR)/file/config_file_userdata.c \
 	$(LIBRETRO_COMM_DIR)/file/file_path.c \
@@ -118,7 +112,7 @@ SOURCES_C += $(LIBRETRO_DIR)/libretro.c \
 	$(LIBRETRO_COMM_DIR)/vfs/vfs_implementation.c \
 	$(LIBRETRO_COMM_DIR)/streams/file_stream.c \
 	$(LIBRETRO_COMM_DIR)/compat/fopen_utf8.c \
-	$(ROOT_DIR)/custom/mupen64plus-core/api/vidext_libretro.c \
+	$(ROOT_DIR)/src/api/vidext_libretro.c \
 
 
 CFLAGS      += -DHAVE_THR_AL

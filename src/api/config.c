@@ -1,6 +1,6 @@
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  *   Mupen64plus-core - api/config.c                                       *
- *   Mupen64Plus homepage: https://mupen64plus.org/                        *
+ *   Mupen64Plus homepage: http://code.google.com/p/mupen64plus/           *
  *   Copyright (C) 2009 Richard Goedeken                                   *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
@@ -8,7 +8,7 @@
  *   the Free Software Foundation; either version 2 of the License, or     *
  *   (at your option) any later version.                                   *
  *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
+ *   This program is distributed in the hope that it will be useful,       * 
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
  *   GNU General Public License for more details.                          *
@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <libretro.h>
 
 #define M64P_CORE_PROTOTYPES 1
 #include "callbacks.h"
@@ -34,7 +35,6 @@
 #include "m64p_config.h"
 #include "m64p_types.h"
 #include "main/util.h"
-#include "main/netplay.h"
 #include "osal/files.h"
 #include "osal/preproc.h"
 
@@ -43,10 +43,7 @@
 
 #define SECTION_MAGIC 0xDBDC0580
 
-struct external_config {
-  char *file;
-  size_t length;
-};
+extern retro_environment_t environ_cb;
 
 typedef struct _config_var {
   char                 *name;
@@ -71,10 +68,9 @@ typedef config_section *config_list;
 
 /* local variables */
 static int         l_ConfigInit = 0;
+static int         l_SaveConfigOnExit = 0;
 static char       *l_DataDirOverride = NULL;
 static char       *l_ConfigDirOverride = NULL;
-static char       *l_UserCacheDirOverride = NULL;
-static char       *l_UserDataDirOverride = NULL;
 static config_list l_ConfigListActive = NULL;
 static config_list l_ConfigListSaved = NULL;
 
@@ -309,7 +305,7 @@ static config_section * section_deepcopy(config_section *orig_section)
             case M64TYPE_BOOL:
                 new_var->val.integer = orig_var->val.integer;
                 break;
-
+                
             case M64TYPE_FLOAT:
                 new_var->val.number = orig_var->val.number;
                 break;
@@ -382,7 +378,7 @@ static m64p_error write_configlist_file(void)
     if (filepath == NULL)
         return M64ERR_NO_MEMORY;
 
-    fPtr = fopen(filepath, "wb"); 
+    fPtr = fopen(filepath, "wb");
     if (fPtr == NULL)
     {
         DebugMessage(M64MSG_ERROR, "Couldn't open configuration file '%s' for writing.", filepath);
@@ -431,166 +427,15 @@ static m64p_error write_configlist_file(void)
 
 m64p_error ConfigInit(const char *ConfigDirOverride, const char *DataDirOverride)
 {
-    m64p_error rval;
-    const char *configpath = NULL;
-    char *filepath;
-    long ftell_result;
-    size_t filelen;
-    FILE *fPtr;
-    char *configtext;
-
-    config_section *current_section = NULL;
-    char *line, *end, *lastcomment;
-
-    if (l_ConfigInit)
-        return M64ERR_ALREADY_INIT;
-    l_ConfigInit = 1;
-
-    /* if a data directory was specified, make a copy of it */
-    if (DataDirOverride != NULL)
-    {
-        l_DataDirOverride = strdup(DataDirOverride);
-        if (l_DataDirOverride == NULL)
-            return M64ERR_NO_MEMORY;
-    }
-
-    /* if a config directory was specified, make a copy of it */
-    if (ConfigDirOverride != NULL)
-    {
-        l_ConfigDirOverride = strdup(ConfigDirOverride);
-        if (l_ConfigDirOverride == NULL)
-            return M64ERR_NO_MEMORY;
-    }
-
-    /* get the full pathname to the config file and try to open it */
-    configpath = ConfigGetUserConfigPath();
-    if (configpath == NULL)
-        return M64ERR_FILES;
-
-    filepath = combinepath(configpath, MUPEN64PLUS_CFG_NAME);
-    if (filepath == NULL)
-        return M64ERR_NO_MEMORY;
-
-    fPtr = fopen(filepath, "rb");
-    if (fPtr == NULL)
-    {
-        DebugMessage(M64MSG_INFO, "Couldn't open configuration file '%s'.  Using defaults.", filepath);
-        free(filepath);
-        return M64ERR_SUCCESS;
-    }
-    free(filepath);
-
-    /* read the entire config file */
-    if (fseek(fPtr, 0L, SEEK_END) != 0)
-    {
-        fclose(fPtr);
-        return M64ERR_FILES;
-    }
-    ftell_result = ftell(fPtr);
-    if (ftell_result == -1)
-    {
-        fclose(fPtr);
-        return M64ERR_FILES;
-    }
-    filelen = (size_t)ftell_result;
-    if (fseek(fPtr, 0L, SEEK_SET) != 0)
-    {
-        fclose(fPtr);
-        return M64ERR_FILES;
-    }
-
-    configtext = (char *) malloc(filelen + 1);
-    if (configtext == NULL)
-    {
-        fclose(fPtr);
-        return M64ERR_NO_MEMORY;
-    }
-    if (fread(configtext, 1, filelen, fPtr) != filelen)
-    {
-        free(configtext);
-        fclose(fPtr);
-        return M64ERR_FILES;
-    }
-    fclose(fPtr);
-
-    /* parse the file data */
-    current_section = NULL;
-    line = configtext;
-    end = configtext + filelen;
-    lastcomment = NULL;
-    *end = 0;
-    while (line < end)
-    {
-        ini_line l = ini_parse_line(&line);
-        switch (l.type)
-        {
-            case INI_COMMENT:
-                lastcomment = l.value;
-                break;
-
-            case INI_SECTION:
-                rval = ConfigOpenSection(l.name, (m64p_handle *) &current_section);
-                if (rval != M64ERR_SUCCESS)
-                {
-                    free(configtext);
-                    return rval;
-                }
-                lastcomment = NULL;
-                break;
-
-            case INI_PROPERTY:
-                if (l.value[0] == '"' && l.value[strlen(l.value)-1] == '"')
-                {
-                    l.value++;
-                    l.value[strlen(l.value)-1] = 0;
-                    ConfigSetDefaultString((m64p_handle) current_section, l.name, l.value, lastcomment);
-                }
-                else if (osal_insensitive_strcmp(l.value, "false") == 0)
-                {
-                    ConfigSetDefaultBool((m64p_handle) current_section, l.name, 0, lastcomment);
-                }
-                else if (osal_insensitive_strcmp(l.value, "true") == 0)
-                {
-                    ConfigSetDefaultBool((m64p_handle) current_section, l.name, 1, lastcomment);
-                }
-                else if (is_numeric(l.value))
-                {
-                    /* preserve values as floats if they are written in the config as floats */
-                    if (strchr(l.value, '.'))
-                    {
-                        float val_float = (float) strtod(l.value, NULL);
-                        ConfigSetDefaultFloat((m64p_handle) current_section, l.name, val_float, lastcomment);
-                    }
-                    else
-                    {
-                        int val_int = (int) strtol(l.value, NULL, 10);
-                        ConfigSetDefaultInt((m64p_handle) current_section, l.name, val_int, lastcomment);
-                    }
-                }
-                else
-                {
-                    /* assume that it's a string */
-                    ConfigSetDefaultString((m64p_handle) current_section, l.name, l.value, lastcomment);
-                }
-                lastcomment = NULL;
-                break;
-
-            default:
-                break;
-        }
-    }
-
-    /* release memory used for config file text */
-    free(configtext);
-
-    /* duplicate the entire config data list, to store a copy of the list which represents the state of the file on disk */
-    copy_configlist_active_to_saved();
-
     return M64ERR_SUCCESS;
 }
 
 m64p_error ConfigShutdown(void)
 {
+    /* first, save the file if necessary */
+    if (l_SaveConfigOnExit)
+        ConfigSaveFile();
+
     /* reset the initialized flag */
     if (!l_ConfigInit)
         return M64ERR_NOT_INIT;
@@ -607,16 +452,6 @@ m64p_error ConfigShutdown(void)
         free(l_ConfigDirOverride);
         l_ConfigDirOverride = NULL;
     }
-    if (l_UserDataDirOverride != NULL)
-    {
-        free(l_UserDataDirOverride);
-        l_UserDataDirOverride = NULL;
-    }
-    if (l_UserCacheDirOverride != NULL)
-    {
-        free(l_UserCacheDirOverride);
-        l_UserCacheDirOverride = NULL;
-    }
 
     /* free all of the memory in the 2 lists */
     delete_list(&l_ConfigListActive);
@@ -628,114 +463,6 @@ m64p_error ConfigShutdown(void)
 /* ------------------------------------------------ */
 /* Selector functions, exported outside of the Core */
 /* ------------------------------------------------ */
-
-EXPORT m64p_error CALL ConfigExternalOpen(const char *FileName, m64p_handle *Handle)
-{
-    FILE *fPtr;
-    struct external_config* ext_config;
-    long ftell_result;
-    size_t filelen = 0;
-    if (FileName == NULL || (fPtr = fopen(FileName, "rb")) == NULL)
-    {
-        DebugMessage(M64MSG_ERROR, "Unable to open config file '%s'.", FileName);
-        return M64ERR_INPUT_INVALID;
-    }
-    /* read the entire config file */
-    if (fseek(fPtr, 0L, SEEK_END) != 0)
-    {
-        fclose(fPtr);
-        return M64ERR_INPUT_INVALID;
-    }
-    ftell_result = ftell(fPtr);
-    if (ftell_result == -1)
-    {
-        fclose(fPtr);
-        return M64ERR_INPUT_INVALID;
-    }
-    filelen = (size_t)ftell_result;
-    if (fseek(fPtr, 0L, SEEK_SET) != 0)
-    {
-        fclose(fPtr);
-        return M64ERR_INPUT_INVALID;
-    }
-    ext_config = malloc(sizeof(struct external_config));
-    if (ext_config == NULL)
-    {
-        fclose(fPtr);
-        return M64ERR_INPUT_INVALID;
-    }
-    ext_config->file = malloc(filelen + 1);
-    if (ext_config->file == NULL)
-    {
-        free(ext_config);
-        fclose(fPtr);
-        return M64ERR_INPUT_INVALID;
-    }
-    if (fread(ext_config->file, 1, filelen, fPtr) != filelen)
-    {
-        free(ext_config->file);
-        free(ext_config);
-        fclose(fPtr);
-        return M64ERR_INPUT_INVALID;
-    }
-    fclose(fPtr);
-    ext_config->length = filelen;
-    *Handle = ext_config;
-    return M64ERR_SUCCESS;
-}
-
-EXPORT m64p_error CALL ConfigExternalClose(m64p_handle Handle)
-{
-    struct external_config* ext_config = Handle;
-    if (ext_config != NULL) {
-        if (ext_config->file != NULL)
-            free(ext_config->file);
-        free(ext_config);
-        return M64ERR_SUCCESS;
-    }
-    return M64ERR_INPUT_INVALID;
-}
-
-EXPORT m64p_error CALL ConfigExternalGetParameter(m64p_handle Handle, const char *SectionName, const char *ParamName, char* ParamPtr, int ParamMaxLength)
-{
-    struct external_config* ext_config = Handle;
-    int foundSection = 0;
-    if (ParamPtr == NULL || SectionName == NULL || ParamName == NULL)
-        return M64ERR_INPUT_INVALID;
-
-    void *buffer = malloc(ext_config->length + 1);
-    memcpy(buffer, ext_config->file, ext_config->length + 1);
-    char *line = buffer;
-    char *end = line + ext_config->length;
-    while (line < end)
-    {
-        ini_line l = ini_parse_line(&line);
-        switch (l.type)
-        {
-            case INI_SECTION:
-                if (osal_insensitive_strcmp(SectionName, l.name) == 0)
-                    foundSection = 1;
-                else
-                    foundSection = 0;
-                break;
-            case INI_PROPERTY:
-                if (foundSection)
-                {
-                    if (osal_insensitive_strcmp(ParamName, l.name) == 0)
-                    {
-                        strncpy(ParamPtr, l.value, ParamMaxLength);
-                        free(buffer);
-                        return M64ERR_SUCCESS;
-                    }
-                }
-                break;
-            default:
-                break;
-        }
-    }
-    free(buffer);
-    return M64ERR_INPUT_NOT_FOUND;
-}
 
 EXPORT m64p_error CALL ConfigListSections(void *context, void (*SectionListCallback)(void * context, const char * SectionName))
 {
@@ -1161,15 +888,18 @@ EXPORT m64p_error CALL ConfigGetParameter(m64p_handle ConfigSectionHandle, const
     switch(ParamType)
     {
         case M64TYPE_INT:
-            if (MaxSize < (int)sizeof(int)) return M64ERR_INPUT_INVALID;
+            if (MaxSize < sizeof(int)) return M64ERR_INPUT_INVALID;
+            if (var->type != M64TYPE_INT && var->type != M64TYPE_FLOAT) return M64ERR_WRONG_TYPE;
             *((int *) ParamValue) = ConfigGetParamInt(ConfigSectionHandle, ParamName);
             break;
         case M64TYPE_FLOAT:
-            if (MaxSize < (int)sizeof(float)) return M64ERR_INPUT_INVALID;
+            if (MaxSize < sizeof(float)) return M64ERR_INPUT_INVALID;
+            if (var->type != M64TYPE_INT && var->type != M64TYPE_FLOAT) return M64ERR_WRONG_TYPE;
             *((float *) ParamValue) = ConfigGetParamFloat(ConfigSectionHandle, ParamName);
             break;
         case M64TYPE_BOOL:
-            if (MaxSize < (int)sizeof(int)) return M64ERR_INPUT_INVALID;
+            if (MaxSize < sizeof(int)) return M64ERR_INPUT_INVALID;
+            if (var->type != M64TYPE_BOOL && var->type != M64TYPE_INT) return M64ERR_WRONG_TYPE;
             *((int *) ParamValue) = ConfigGetParamBool(ConfigSectionHandle, ParamName);
             break;
         case M64TYPE_STRING:
@@ -1255,14 +985,10 @@ EXPORT m64p_error CALL ConfigSetDefaultInt(m64p_handle ConfigSectionHandle, cons
     if (section->magic != SECTION_MAGIC)
         return M64ERR_INPUT_INVALID;
 
-    /* if this parameter already exists, add help text if missing, then return successfully */
+    /* if this parameter already exists, then just return successfully */
     var = find_section_var(section, ParamName);
     if (var != NULL)
-    {
-        if (ParamHelp != NULL && var->comment == NULL)
-            var->comment = strdup(ParamHelp);
         return M64ERR_SUCCESS;
-    }
 
     /* otherwise create a new config_var object and add it to this section */
     var = config_var_create(ParamName, ParamHelp);
@@ -1290,14 +1016,10 @@ EXPORT m64p_error CALL ConfigSetDefaultFloat(m64p_handle ConfigSectionHandle, co
     if (section->magic != SECTION_MAGIC)
         return M64ERR_INPUT_INVALID;
 
-    /* if this parameter already exists, add help text if missing, then return successfully */
+    /* if this parameter already exists, then just return successfully */
     var = find_section_var(section, ParamName);
     if (var != NULL)
-    {
-        if (ParamHelp != NULL && var->comment == NULL)
-            var->comment = strdup(ParamHelp);
         return M64ERR_SUCCESS;
-    }
 
     /* otherwise create a new config_var object and add it to this section */
     var = config_var_create(ParamName, ParamHelp);
@@ -1325,14 +1047,10 @@ EXPORT m64p_error CALL ConfigSetDefaultBool(m64p_handle ConfigSectionHandle, con
     if (section->magic != SECTION_MAGIC)
         return M64ERR_INPUT_INVALID;
 
-    /* if this parameter already exists, add help text if missing, then return successfully */
+    /* if this parameter already exists, then just return successfully */
     var = find_section_var(section, ParamName);
     if (var != NULL)
-    {
-        if (ParamHelp != NULL && var->comment == NULL)
-            var->comment = strdup(ParamHelp);
         return M64ERR_SUCCESS;
-    }
 
     /* otherwise create a new config_var object and add it to this section */
     var = config_var_create(ParamName, ParamHelp);
@@ -1360,14 +1078,10 @@ EXPORT m64p_error CALL ConfigSetDefaultString(m64p_handle ConfigSectionHandle, c
     if (section->magic != SECTION_MAGIC)
         return M64ERR_INPUT_INVALID;
 
-    /* if this parameter already exists, add help text if missing, then return successfully */
+    /* if this parameter already exists, then just return successfully */
     var = find_section_var(section, ParamName);
     if (var != NULL)
-    {
-        if (ParamHelp != NULL && var->comment == NULL)
-            var->comment = strdup(ParamHelp);
         return M64ERR_SUCCESS;
-    }
 
     /* otherwise create a new config_var object and add it to this section */
     var = config_var_create(ParamName, ParamHelp);
@@ -1456,7 +1170,7 @@ EXPORT float CALL ConfigGetParamFloat(m64p_handle ConfigSectionHandle, const cha
         return 0.0;
     }
 
-    /* translate the actual variable type to a float */
+    /* translate the actual variable type to an int */
     switch(var->type)
     {
         case M64TYPE_INT:
@@ -1500,7 +1214,7 @@ EXPORT int CALL ConfigGetParamBool(m64p_handle ConfigSectionHandle, const char *
         return 0;
     }
 
-    /* translate the actual variable type to an int (0 or 1) */
+    /* translate the actual variable type to an int */
     switch(var->type)
     {
         case M64TYPE_INT:
@@ -1545,7 +1259,7 @@ EXPORT const char * CALL ConfigGetParamString(m64p_handle ConfigSectionHandle, c
         return "";
     }
 
-    /* translate the actual variable type to a string */
+    /* translate the actual variable type to an int */
     switch(var->type)
     {
         case M64TYPE_INT:
@@ -1566,103 +1280,36 @@ EXPORT const char * CALL ConfigGetParamString(m64p_handle ConfigSectionHandle, c
     }
 }
 
-EXPORT m64p_error CALL ConfigOverrideUserPaths(const char *DataPath, const char *CachePath)
-{
-    /* make sure we're initialized */
-    if (!l_ConfigInit)
-        return M64ERR_NOT_INIT;
-
-    /* cleanup variables */
-    if (l_UserDataDirOverride != NULL)
-    {
-        free(l_UserDataDirOverride);
-        l_UserDataDirOverride = NULL;
-    }
-    if (l_UserCacheDirOverride != NULL)
-    {
-        free(l_UserCacheDirOverride);
-        l_UserCacheDirOverride = NULL;
-    }
-
-    /* if a data directory was specified, make a copy of it */
-    if (DataPath != NULL)
-    {
-        l_UserDataDirOverride = strdup(DataPath);
-        if (l_UserDataDirOverride == NULL)
-            return M64ERR_NO_MEMORY;
-    }
-
-    /* if a cache directory was specified, make a copy of it */
-    if (CachePath != NULL)
-    {
-        l_UserCacheDirOverride = strdup(CachePath);
-        if (l_UserCacheDirOverride == NULL)
-            return M64ERR_NO_MEMORY;
-    }
-
-    return M64ERR_SUCCESS;
-}
-
 /* ------------------------------------------------------ */
 /* OS Abstraction functions, exported outside of the Core */
 /* ------------------------------------------------------ */
+extern retro_environment_t environ_cb;
 
 EXPORT const char * CALL ConfigGetSharedDataFilepath(const char *filename)
 {
-    const char *configsharepath = NULL;
-    m64p_handle CoreHandle = NULL;
-
-    /* check input parameter */
-    if (filename == NULL) return NULL;
-
-    /* try to get the SharedDataPath string variable in the Core configuration section */
-    if (ConfigOpenSection("Core", &CoreHandle) == M64ERR_SUCCESS)
-    {
-        configsharepath = ConfigGetParamString(CoreHandle, "SharedDataPath");
-    }
-
-    return osal_get_shared_filepath(filename, l_DataDirOverride, configsharepath);
+  char* sys_systemDir = NULL;
+  if (!environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY,&sys_systemDir) || !sys_systemDir || !*sys_systemDir)
+    sys_systemDir = "./";
+  static char systemDir[2048];
+  strncpy(systemDir, sys_systemDir, 2048);
+  if (systemDir[(strlen(systemDir)-1)] != '/' && systemDir[(strlen(systemDir)-1)] != '\\')
+     strcat(systemDir, "/");
+  strcat(systemDir, "Mupen64plus/");
+  strcat(systemDir, filename);
+  return systemDir;
 }
 
 EXPORT const char * CALL ConfigGetUserConfigPath(void)
 {
-    if (l_ConfigDirOverride != NULL)
-    {
-        osal_mkdirp(l_ConfigDirOverride, 0700);
-        return l_ConfigDirOverride;
-    }
-    else
-        return osal_get_user_configpath();
+  return "";
 }
 
 EXPORT const char * CALL ConfigGetUserDataPath(void)
 {
-    if (l_UserDataDirOverride != NULL)
-    {
-        osal_mkdirp(l_UserDataDirOverride, 0700);
-        return l_UserDataDirOverride;
-    }
-    else
-        return osal_get_user_datapath();
+  return "";
 }
 
 EXPORT const char * CALL ConfigGetUserCachePath(void)
 {
-    if (l_UserCacheDirOverride != NULL)
-    {
-        osal_mkdirp(l_UserCacheDirOverride, 0700);
-        return l_UserCacheDirOverride;
-    }
-    else
-        return osal_get_user_cachepath();
-}
-
-EXPORT m64p_error CALL ConfigSendNetplayConfig(char* data, int size)
-{
-    return netplay_send_config(data, size);
-}
-
-EXPORT m64p_error CALL ConfigReceiveNetplayConfig(char* data, int size)
-{
-    return netplay_receive_config(data, size);
+  return "";
 }

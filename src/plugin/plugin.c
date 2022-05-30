@@ -34,8 +34,6 @@
 #include "device/rcp/rdp/rdp_core.h"
 #include "device/rcp/rsp/rsp_core.h"
 #include "device/rcp/rdp/vi_controller.h"
-#include "dummy_audio.h"
-#include "dummy_input.h"
 #include "main/main.h"
 #include "main/rom.h"
 #include "main/version.h"
@@ -103,6 +101,22 @@ input_plugin_functions input;
 rsp_plugin_functions rsp;
 RSP_INFO rsp_info;
 
+extern m64p_error dummyaudio_PluginGetVersion(m64p_plugin_type *PluginType, int *PluginVersion,
+                                              int *APIVersion, const char **PluginNamePtr, int *Capabilities);
+extern void dummyaudio_AiDacrateChanged(int SystemType);
+extern void dummyaudio_AiLenChanged(void);
+extern int  dummyaudio_InitiateAudio(AUDIO_INFO Audio_Info);
+extern void dummyaudio_ProcessAList(void);
+extern int  dummyaudio_RomOpen(void);
+extern void dummyaudio_RomClosed(void);
+extern void dummyaudio_SetSpeedFactor(int percent);
+extern void dummyaudio_VolumeUp(void);
+extern void dummyaudio_VolumeDown(void);
+extern int dummyaudio_VolumeGetLevel(void);
+extern void dummyaudio_VolumeSetLevel(int level);
+extern void dummyaudio_VolumeMute(void);
+extern const char * dummyaudio_VolumeGetString(void);
+
 const audio_plugin_functions dummy_audio = {
     dummyaudio_PluginGetVersion,
     dummyaudio_AiDacrateChanged,
@@ -130,6 +144,9 @@ extern void inputInitiateControllers(CONTROL_INFO ControlInfo);
 extern void inputReadController(int Control, unsigned char *Command);
 extern int  inputRomOpen(void);
 extern void inputRomClosed(void);
+extern void dummyinput_SDL_KeyDown(int keymod, int keysym);
+extern void dummyinput_SDL_KeyUp(int keymod, int keysym);
+extern void dummyinput_RenderCallback(void);
 
 
 const input_plugin_functions dummy_input = {
@@ -374,38 +391,8 @@ m64p_error plugin_check(void)
 }
 
 #ifdef __LIBRETRO__
-enum rdp_plugin_type current_rdp_type = RDP_PLUGIN_NONE;
-enum rsp_plugin_type current_rsp_type = RSP_PLUGIN_NONE;
-
-void plugin_connect_rdp_api(enum rdp_plugin_type type)
-{
-   switch (type)
-   {
-      case RDP_PLUGIN_GLIDEN64:
-      case RDP_PLUGIN_ANGRYLION:
-      case RDP_PLUGIN_PARALLEL:
-         current_rdp_type = type;
-         break;
-      case RSP_PLUGIN_NONE:
-      default:
-         break;
-   }
-}
-
-void plugin_connect_rsp_api(enum rsp_plugin_type type)
-{
-   switch (type)
-   {
-      case RSP_PLUGIN_HLE:
-      case RSP_PLUGIN_CXD4:
-      case RSP_PLUGIN_PARALLEL:
-         current_rsp_type = type;
-         break;
-      case RSP_PLUGIN_NONE:
-      default:
-         break;
-   }
-}
+enum rdp_plugin_type current_rdp_type = RDP_PLUGIN_ANGRYLION;
+enum rsp_plugin_type current_rsp_type = RSP_PLUGIN_CXD4;
 
 /* global functions */
 void plugin_connect_all()

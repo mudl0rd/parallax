@@ -26,7 +26,17 @@
 #include "api/m64p_common.h"
 #include "api/m64p_plugin.h"
 #include "api/m64p_types.h"
-#include "mupen64plus-next_common.h"
+
+extern void plugin_connect_all();
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+uint32_t get_retro_screen_width();
+uint32_t get_retro_screen_height();
+#ifdef __cplusplus
+}
+#endif
 
 extern GFX_INFO gfx_info;
 
@@ -43,7 +53,7 @@ extern CONTROL Controls[NUM_CONTROLLER];
 #define RSP_API_VERSION   0x20000
 #define GFX_API_VERSION   0x20200
 #define AUDIO_API_VERSION 0x20000
-#define INPUT_API_VERSION 0x20100
+#define INPUT_API_VERSION 0x20001
 
 /* video plugin function pointers */
 typedef struct _gfx_plugin_functions

@@ -22,9 +22,9 @@
 #include "api/m64p_types.h"
 #include <libretro.h>
 #include "device/rcp/ai_controller.h"
-#include "../../../../mupen64plus-core/src/main/main.h"
-#include "../../../../mupen64plus-core/src/device/device.h"
-#include "../../../../mupen64plus-core/src/main/rom.h"
+#include "../src/main/main.h"
+#include "../src/device/device.h"
+#include "../src/main/rom.h"
 #include "plugin/plugin.h"
 #include "device/rcp/ri_controller.h"
 #include "device/rcp/rdp/vi_controller.h"
@@ -196,3 +196,91 @@ void push_audio_samples_via_libretro(void* user_data, const void* buffer, size_t
    ai->regs[AI_LEN_REG]       = saved_ai_length;
    ai->regs[AI_DRAM_ADDR_REG] = saved_ai_dram;
 }
+
+
+m64p_error dummyaudio_PluginGetVersion(m64p_plugin_type *PluginType, int *PluginVersion,
+                                       int *APIVersion, const char **PluginNamePtr, int *Capabilities)
+{
+    if (PluginType != NULL)
+        *PluginType = M64PLUGIN_AUDIO;
+
+    if (PluginVersion != NULL)
+        *PluginVersion = 0x00010000;
+
+    if (APIVersion != NULL)
+        *APIVersion = AUDIO_API_VERSION;
+
+    if (PluginNamePtr != NULL)
+        *PluginNamePtr = "Mupen64Plus-NoAudio";
+
+    if (Capabilities != NULL)
+        *Capabilities = 0;
+
+    return M64ERR_SUCCESS;
+}
+
+void dummyaudio_AiDacrateChanged(int SystemType)
+{
+    return;
+}
+
+void dummyaudio_AiLenChanged(void)
+{
+    return;
+}
+
+int dummyaudio_InitiateAudio(AUDIO_INFO Audio_Info)
+{
+    return 1;
+}
+
+int dummyaudio_RomOpen(void)
+{
+    return 1;
+}
+
+void dummyaudio_RomClosed(void)
+{
+    return;
+}
+
+void dummyaudio_ProcessAList(void)
+{
+    return;
+}
+
+void dummyaudio_SetSpeedFactor(int percent)
+{
+    return;
+}
+
+void dummyaudio_VolumeUp(void)
+{
+    return;
+}
+
+void dummyaudio_VolumeDown(void)
+{
+    return;
+}
+
+int dummyaudio_VolumeGetLevel(void)
+{
+    return 0;
+}
+
+void dummyaudio_VolumeSetLevel(int level)
+{
+    return;
+}
+
+void dummyaudio_VolumeMute(void)
+{
+    return;
+}
+
+const char *dummyaudio_VolumeGetString(void)
+{
+    return "disabled";
+}
+
