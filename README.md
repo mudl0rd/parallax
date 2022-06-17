@@ -1,4 +1,4 @@
-# libgarbagefiar
+# libgarbagefire
 
 ![garbagefire](https://user-images.githubusercontent.com/56025978/170892431-f2e70f44-1a40-4dc6-975d-0a89d00a8589.png)
 
