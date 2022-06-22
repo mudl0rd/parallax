@@ -27,6 +27,7 @@
 #include "libretro_private.h"
 
 #include "mupen64plus-next_common.h"
+#include "device/rcp/rdp/para_intf.h"
 
 #ifdef HAVE_LIBNX
 #include <switch.h>
@@ -51,6 +52,7 @@
 #include "device/pif/pif.h"
 #include "libretro_memory.h"
 
+
 #ifndef PRESCALE_WIDTH
 #define PRESCALE_WIDTH  640
 #endif
@@ -72,14 +74,7 @@ void angrylion_set_synclevel(unsigned value);
 void angrylion_set_vi_dedither(unsigned value);
 void angrylion_set_vi(unsigned value);
 
-struct rgba
-{
-    uint8_t b;
-    uint8_t g;
-    uint8_t r;
-    uint8_t a;
-};
-extern struct rgba prescale[PRESCALE_WIDTH * PRESCALE_HEIGHT];
+uint8_t *prescale=NULL;
 
 struct retro_perf_callback perf_cb;
 retro_get_cpu_features_t perf_get_cpu_features_cb = NULL;
@@ -108,12 +103,6 @@ static bool     initializing         = true;
 static bool     load_game_successful = false;
 
 bool libretro_swap_buffer;
-
-uint32_t *blitter_buf = NULL;
-uint32_t *blitter_buf_lock = NULL;
-uint32_t retro_screen_width = 640;
-uint32_t retro_screen_height = 480;
-uint32_t screen_pitch = 0;
 
 float retro_screen_aspect = 4.0 / 3.0;
 
@@ -421,11 +410,11 @@ void retro_get_system_info(struct retro_system_info *info)
 
 void retro_get_system_av_info(struct retro_system_av_info *info)
 {
-    info->geometry.base_width   = retro_screen_width;
-    info->geometry.base_height  = retro_screen_height;
-    info->geometry.max_width    = retro_screen_width;
-    info->geometry.max_height   = retro_screen_height;
-    info->geometry.aspect_ratio = retro_screen_aspect;
+    info->geometry.base_width   = 640;
+    info->geometry.base_height  = 480;
+    info->geometry.max_width    = 640;
+    info->geometry.max_height   = 480;
+    info->geometry.aspect_ratio = 640/480;
     info->timing.fps = vi_expected_refresh_rate_from_tv_standard(ROM_PARAMS.systemtype);
     info->timing.sample_rate = 44100.0;
 }
@@ -475,6 +464,9 @@ void retro_init(void)
 
     environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &colorMode);
     environ_cb(RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE, &rumble);
+
+    prescale = (uint8_t*)malloc(PRESCALE_WIDTH * PRESCALE_HEIGHT*sizeof(uint32_t));
+    memset(prescale,0,PRESCALE_WIDTH * PRESCALE_HEIGHT);
    
    initializing = true;
 }
@@ -491,6 +483,8 @@ void retro_deinit(void)
         perf_cb.perf_log();
 
     rdp_plugin_last[0] = '\0';
+
+    free(prescale);
 }
 
 void update_controllers()
@@ -686,8 +680,6 @@ void update_variables(bool startup)
       EnableFullspeed = 0;
       CountPerScanlineOverride =  0 ;
       r4300_emumode = EMUMODE_PURE_INTERPRETER;
-      retro_screen_width = 640;
-      retro_screen_height = 480;
       retro_screen_aspect = 4.0 / 3.0;
      AspectRatio = 1; // Aspect::a43
     CountPerOp = 1; // Force CountPerOp == 1
@@ -711,9 +703,9 @@ void retro_run (void)
     EmuThreadFunction();
     
     if (libretro_swap_buffer)
-    video_cb(prescale, retro_screen_width, retro_screen_height, screen_pitch);
+    video_cb(prescale, retro_width, retro_height,retro_width*4);
     else 
-    video_cb(NULL, retro_screen_width, retro_screen_height, screen_pitch);
+    video_cb(NULL, retro_width, retro_height, retro_width * 4);
 }
 
 void retro_reset (void)
@@ -819,16 +811,6 @@ void retro_return(void)
 {
 }
 
-uint32_t get_retro_screen_width()
-{
-    return retro_screen_width;
-}
-
-uint32_t get_retro_screen_height()
-{
-    return retro_screen_height;
-}
-
 static int GamesharkActive = 0;
 
 int event_gameshark_active(void)
@@ -847,4 +829,113 @@ void event_set_gameshark(int active)
 
     // notify front-end application that gameshark button state has changed
     StateChanged(M64CORE_INPUT_GAMESHARK, GamesharkActive);
+}
+
+
+
+
+
+
+
+void angrylionChangeWindow (void) { }
+
+void angrylionReadScreen2(void *dest, int *width, int *height, int front) { }
+ 
+void angrylionDrawScreen (void) { }
+
+typedef struct {
+    uint16_t Version;        /* Set to 0x0103 */
+    uint16_t Type;           /* Set to PLUGIN_TYPE_GFX */
+    char Name[100];      /* Name of the DLL */
+
+    /* If DLL supports memory these memory options then set them to TRUE or FALSE
+       if it does not support it */
+    int NormalMemory;    /* a normal uint8_t array */ 
+    int MemoryBswaped;  /* a normal uint8_t array where the memory has been pre
+                              bswap on a dword (32 bits) boundry */
+} PLUGIN_INFO;
+
+void angrylionGetDllInfo(PLUGIN_INFO* PluginInfo)
+{
+    PluginInfo -> Version = 0x0103;
+    PluginInfo -> Type  = 2;
+    strcpy(
+    PluginInfo -> Name, "angrylion's RDP"
+    );
+    PluginInfo -> NormalMemory = true;
+    PluginInfo -> MemoryBswaped = true;
+}
+
+void angrylionSetRenderingCallback(void (*callback)(int)) { }
+
+int angrylionInitiateGFX (GFX_INFO Gfx_Info)
+{
+   return 1;
+}
+ 
+void angrylionMoveScreen (int xpos, int ypos) { }
+ 
+void angrylionProcessDList(void)
+{
+}
+
+void angrylionProcessRDPList(void)
+{
+   vk_process_commands();
+}
+
+void angrylionRomClosed (void)
+{
+ 
+        vk_destroy();
+
+}
+
+int angrylionRomOpen(void)
+{
+   vk_init();
+
+   return 1;
+}
+
+void angrylionUpdateScreen(void)
+{
+    vk_rasterize(); 
+}
+
+void angrylionShowCFB (void)
+{
+   vk_rasterize();
+}
+
+
+void angrylionViStatusChanged (void) { }
+
+void angrylionViWidthChanged (void) { }
+
+void angrylionFBWrite(unsigned int addr, unsigned int size) { }
+
+void angrylionFBRead(unsigned int addr) { }
+
+void angrylionFBGetFrameBufferInfo(void *pinfo) { }
+
+m64p_error angrylionPluginGetVersion(m64p_plugin_type *PluginType, int *PluginVersion, int *APIVersion, const char **PluginNamePtr, int *Capabilities)
+{
+   /* set version info */
+   if (PluginType != NULL)
+      *PluginType = M64PLUGIN_GFX;
+
+   if (PluginVersion != NULL)
+      *PluginVersion = 0x016304;
+
+   if (APIVersion != NULL)
+      *APIVersion = 0x020100;
+
+   if (PluginNamePtr != NULL)
+      *PluginNamePtr = "MAME/Angrylion/HatCat/ata4 video Plugin";
+
+   if (Capabilities != NULL)
+      *Capabilities = 0;
+
+   return M64ERR_SUCCESS;
 }

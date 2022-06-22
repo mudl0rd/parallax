@@ -1,5 +1,7 @@
 CORE_DIR           = $(ROOT_DIR)
 LIBRETRO_COMM_DIR  = $(ROOT_DIR)/deps/libretro-common
+VIDEODIR_PARALLEL  =  $(CORE_DIR)/src/device/rcp/rdp/p_rdp
+PARALLEL_RDP_IMPLEMENTATION = $(CORE_DIR)/src/device/rcp/rdp/p_rdp
 
 DYNAREC_USED := 0
 
@@ -10,6 +12,7 @@ INCFLAGS += \
 	-I$(CORE_DIR)/src \
 	-I$(CORE_DIR)/src/api \
 	-I$(LIBRETRO_COMM_DIR)/include \
+	-I$(CORE_DIR)/src/device/rcp/rdp
 
 ifneq (,$(findstring win,$(platform)))
 	INCFLAGS += -I$(ROOT_DIR)/custom/mman-win32
@@ -73,6 +76,22 @@ SOURCES_C = \
 
 
 
+HAVE_PARALLEL_RDP ?= 1
+include $(VIDEODIR_PARALLEL)/config.mk
+
+CFLAGS   += $(PARALLEL_RDP_CFLAGS) -DHAVE_PARALLEL_RDP
+CXXFLAGS += $(PARALLEL_RDP_CXXFLAGS) -DHAVE_PARALLEL_RDP
+CXXFLAGS += $(PARALLEL_RDP_INCLUDE_DIRS) -DHAVE_PARALLEL_RDP
+LDLIBS += -lcomctl32
+SOURCES_CXX +=  $(PARALLEL_RDP_SOURCES_CXX)
+SOURCES_C += $(PARALLEL_RDP_SOURCES_C)
+SOURCES_CXX += $(CORE_DIR)/src/device/rcp/rdp/parallel_imp.cpp
+
+LDFLAGS += $(PARALLEL_RDP_LDFLAGS)
+
+
+
+
 # MD5 lib
 SOURCES_C += \
 	$(ROOT_DIR)/deps/md5.c
@@ -112,14 +131,6 @@ SOURCES_C += $(ROOT_DIR)/src/libretro.c \
 	$(LIBRETRO_COMM_DIR)/streams/file_stream.c \
 	$(LIBRETRO_COMM_DIR)/compat/fopen_utf8.c \
 	$(ROOT_DIR)/src/api/vidext_libretro.c \
-
-
-CFLAGS      += -DHAVE_THR_AL
-CXXFLAGS    += -DHAVE_THR_AL
-### Angrylion's renderer ###
-SOURCES_CXX += $(CORE_DIR)/src/device/rcp/rdp/al/parallel_al.cpp
-SOURCES_C   += $(CORE_DIR)/src/device/rcp/rdp/al/interface.c \
-				   $(CORE_DIR)/src/device/rcp/rdp/al/n64video.c
 
 
 SOURCES_C += $(CORE_DIR)/src/device/rcp/rsp/cxd4/rsp.c
