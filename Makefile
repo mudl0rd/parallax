@@ -74,7 +74,7 @@ else ifeq ($(ARCH), $(filter $(ARCH), arm))
    WITH_DYNAREC = arm
 endif
 
-TARGET_NAME := libgarbagefiar
+TARGET_NAME := libgarbagefire
 CC_AS ?= $(CC)
 NASM  ?= nasm
 
@@ -500,7 +500,7 @@ else
    HAVE_THR_AL = 1
    LLE = 1
    COREFLAGS += -DOS_WINDOWS -DMINGW -DUNICODE
-   CXXFLAGS += -fpermissive
+   CXXFLAGS += -fpermissive -msse4.1
 endif
 
 ifeq ($(STATIC_LINKING), 1)

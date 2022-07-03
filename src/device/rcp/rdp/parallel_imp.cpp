@@ -12,8 +12,6 @@
 
 uint32_t rdram_size = 0x800000;
 
-
-
 using namespace Vulkan;
 using namespace std;
 
@@ -39,67 +37,121 @@ bool vk_synchronous, vk_divot_filter, vk_gamma_dither;
 bool vk_vi_aa, vk_vi_scale, vk_dither_filter;
 bool vk_interlacing;
 
-
-
 bool skip_swap_clear;
 static bool vk_initialized;
-
 
 #ifdef _WIN32
 #include <intrin.h>
 #endif
 
+inline unsigned long rotatel(unsigned long X, int C)
+{
+	return (X << C) | (X >> ((sizeof(long) * 8) - C));
+}
+
 static const unsigned cmd_len_lut[64] = {
-	1, 1, 1, 1, 1, 1, 1, 1, 4, 6, 12, 14, 12, 14, 20, 22,
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  1,  1,  1,  1,  1,
-	1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1,  1,  1,  1,  1,  1,
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  1,  1,  1,  1,  1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	4,
+	6,
+	12,
+	14,
+	12,
+	14,
+	20,
+	22,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	2,
+	2,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
+	1,
 };
 
-	void rgba2bgra(const void *source, void *dest, unsigned int width, unsigned int height)
+void rgba2bgra(const void *source, void *dest, unsigned int width, unsigned int height)
+{
+	uint32_t *src = nullptr;
+	uint32_t *dst = nullptr;
+	unsigned int x = 0;
+	unsigned int y = 0;
+	static const __m128i m = _mm_set_epi8(15, 12, 13, 14, 11, 8, 9, 10, 7, 4, 5, 6, 3, 0, 1, 2);
+
+	for (y = 0; y < height; y++)
 	{
-		uint32_t *src = nullptr;
-		uint32_t *dst = nullptr;
-		unsigned int x = 0;
-		unsigned int y = 0;
-		__m128i brMask = _mm_set1_epi32(0x00ff00ff); // argb
-
-		for (y = 0; y < height; y++) {
-			// Start of buffer
-			auto src = static_cast<const unsigned __int32*>(source); // unsigned int = 4 bytes
-			auto dst = static_cast<unsigned __int32*>(dest);
-			// Cast first to avoid warning C26451: Arithmetic overflow
-			unsigned long H1YxW = (unsigned long)((height - 1 - y) * width);
-			unsigned long YxW = (unsigned long)(y * width);
-			src += YxW;
-			dst += YxW; 
-			unsigned int x;
-			for (x = 0; ((reinterpret_cast<intptr_t>(&dst[x]) & 15) != 0) && x < width; x++) {
-				auto rgbapix = src[x];
-				// rgbapix << 16		: a r g b > g b a r
-				//        & 0x00ff00ff  : r g b . > . b . r
-				// rgbapix & 0xff00ff00 : a r g b > a . g .
-				// result of or			:           a b g r
-				dst[x] = (_rotl(rgbapix, 16) & 0x00ff00ff) | (rgbapix & 0xff00ff00);
-			}
-			for (; x + 3 < width; x += 4) {
-				__m128i sourceData = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&src[x]));
-				// Mask out g and a, which don't change
-				__m128i gaComponents = _mm_andnot_si128(brMask, sourceData);
-				// Mask out b and r
-				__m128i brComponents = _mm_and_si128(sourceData, brMask);
-				// Swap b and r
-				__m128i brSwapped = _mm_shufflehi_epi16(_mm_shufflelo_epi16(brComponents, _MM_SHUFFLE(2, 3, 0, 1)), _MM_SHUFFLE(2, 3, 0, 1));
-				__m128i result = _mm_or_si128(gaComponents, brSwapped);
-				_mm_store_si128(reinterpret_cast<__m128i*>(&dst[x]), result);
-			}
-			for (; x < width; x++) {
-				auto rgbapix = src[x];
-				dst[x] = (_rotl(rgbapix, 16) & 0x00ff00ff) | (rgbapix & 0xff00ff00);
-			}
-
+		// Start of buffer
+		auto src = static_cast<const unsigned __int32 *>(source); // unsigned int = 4 bytes
+		auto dst = static_cast<unsigned __int32 *>(dest);
+		// Cast first to avoid warning C26451: Arithmetic overflow
+		unsigned long YxW = (unsigned long)(y * width);
+		src += YxW;
+		dst += YxW;
+		unsigned int x;
+		for (x = 0; ((reinterpret_cast<intptr_t>(&dst[x]) & 15) != 0) && x < width; x++)
+		{
+			auto rgbapix = src[x];
+			dst[x] = (rotatel(rgbapix, 16) & 0x00ff00ff) | (rgbapix & 0xff00ff00);
+		}
+		for (; x + 3 < width; x += 4)
+		{
+			__m128i sourceData = _mm_loadu_si128(reinterpret_cast<const __m128i *>(&src[x]));
+			__m128i bgra = _mm_shuffle_epi8(sourceData, m);
+			_mm_store_si128(reinterpret_cast<__m128i *>(&dst[x]), bgra);
+		}
+		for (; x < width; x++)
+		{
+			auto rgbapix = src[x];
+			dst[x] = (rotatel(rgbapix, 16) & 0x00ff00ff) | (rgbapix & 0xff00ff00);
 		}
 	}
+}
 
 void vk_blit(unsigned &width, unsigned &height)
 {
@@ -117,7 +169,8 @@ void vk_blit(unsigned &width, unsigned &height)
 		opts.upscale_deinterlacing = !vk_interlacing;
 		opts.downscale_steps = vk_downscaling_steps;
 		opts.crop_overscan_pixels = vk_overscan;
-		if (vk_vertical_stretch) {
+		if (vk_vertical_stretch)
+		{
 			opts.crop_rect.top = vk_vertical_stretch;
 			opts.crop_rect.bottom = vk_vertical_stretch;
 			opts.crop_rect.enable = true;
@@ -140,8 +193,8 @@ void vk_blit(unsigned &width, unsigned &height)
 		retro_pitch = height * sizeof(uint32_t);
 
 		scanout.fence->wait();
-        uint8_t* ptr = device->map_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
-		rgba2bgra(ptr,prescale, retro_width, retro_height);
+		uint8_t *ptr = device->map_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
+		rgba2bgra(ptr, prescale, retro_width, retro_height);
 		device->unmap_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
 	}
 }
@@ -175,8 +228,8 @@ void vk_rasterize()
 
 		unsigned width = 0;
 		unsigned height = 0;
-		
-        vk_blit(width, height);
+
+		vk_blit(width, height);
 		if (width == 0 || height == 0)
 		{
 			screen_swap(true);
@@ -268,7 +321,8 @@ void vk_process_commands()
 
 void vk_destroy()
 {
-	 if (!vk_initialized)return;
+	if (!vk_initialized)
+		return;
 	running = false;
 	frontend.reset();
 	device.reset();
@@ -289,7 +343,6 @@ bool vk_init()
 
 	uintptr_t aligned_rdram = reinterpret_cast<uintptr_t>(gfx_info.RDRAM);
 	uintptr_t offset = 0;
-
 
 	if (device->get_device_features().supports_external_memory_host)
 	{
@@ -327,7 +380,5 @@ bool vk_init()
 
 void screen_swap(bool blank)
 {
-     libretro_swap_buffer = !blank;
+	libretro_swap_buffer = !blank;
 }
-
-
