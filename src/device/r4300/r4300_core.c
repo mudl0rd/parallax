@@ -70,33 +70,6 @@ void poweron_r4300(struct r4300_core* r4300)
     poweron_cp1(&r4300->cp1);
 }
 
-
-void run_r4300(struct r4300_core* r4300)
-{
-#ifdef OSAL_SSE
-    //Save FTZ/DAZ mode
-    unsigned int daz = _MM_GET_DENORMALS_ZERO_MODE();
-    unsigned int ftz = _MM_GET_FLUSH_ZERO_MODE();
-    _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_OFF);
-#endif
-if(r4300->startup)
-{
-    *r4300_stop(r4300) = 0;
-    g_rom_pause = 0;
-    r4300->emumode = EMUMODE_PURE_INTERPRETER;
-   *r4300_pc_struct(r4300) = &r4300->interp_PC;
-   *r4300_pc(r4300) = r4300->cp0.last_addr = r4300->start_address;
-   r4300->startup=0;
-}
-    run_pure_interpreter(r4300);
-    /* print instruction counts */
-#ifdef OSAL_SSE
-    //Restore FTZ/DAZ mode
-    _MM_SET_DENORMALS_ZERO_MODE(daz);
-    _MM_SET_FLUSH_ZERO_MODE(ftz);
-#endif
-}
-
 int64_t* r4300_regs(struct r4300_core* r4300)
 {
 

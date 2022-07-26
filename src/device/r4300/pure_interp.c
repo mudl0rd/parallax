@@ -22,6 +22,7 @@
 #include "pure_interp.h"
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
@@ -157,7 +158,16 @@ static void InterpretOpcode(struct r4300_core* r4300);
 
 #include "mips_instructions.def"
 
-void InterpretOpcode(struct r4300_core* r4300)
+bool breakloop;
+extern void main_check_inputs(void);
+void new_vi(void)
+{
+    // apply_speed_limiter();
+    main_check_inputs();
+    breakloop=true;
+}
+
+static void InterpretOpcode(struct r4300_core* r4300)
 {
 	uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));
 	if (op_address == NULL)
@@ -704,7 +714,31 @@ void InterpretOpcode(struct r4300_core* r4300)
 	} /* switch ((op >> 26) & 0x3F) */
 }
 
-void run_pure_interpreter(struct r4300_core* r4300)
+void run_r4300(struct r4300_core* r4300)
 {
+
+#ifdef OSAL_SSE
+    //Save FTZ/DAZ mode
+    unsigned int daz = _MM_GET_DENORMALS_ZERO_MODE();
+    unsigned int ftz = _MM_GET_FLUSH_ZERO_MODE();
+    _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_OFF);
+#endif
+	breakloop=false;
+    if(r4300->startup)
+	{
+    *r4300_stop(r4300) = 0;
+    r4300->emumode = EMUMODE_PURE_INTERPRETER;
+   *r4300_pc_struct(r4300) = &r4300->interp_PC;
+   *r4300_pc(r4300) = r4300->cp0.last_addr = r4300->start_address;
+   r4300->startup=0;
+	}
+
+    while(!breakloop)
      InterpretOpcode(r4300);
+
+	 #ifdef OSAL_SSE
+    //Restore FTZ/DAZ mode
+    _MM_SET_DENORMALS_ZERO_MODE(daz);
+    _MM_SET_FLUSH_ZERO_MODE(ftz);
+#endif
 }

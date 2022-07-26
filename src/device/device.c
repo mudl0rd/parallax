@@ -254,12 +254,6 @@ void poweron_device(struct device* dev)
     }
 }
 
-void run_device(struct device* dev)
-{
-    /* device execution is driven by the r4300 */
-    run_r4300(&dev->r4300);
-}
-
 void stop_device(struct device* dev)
 {
     /* set stop flag so that r4300 execution will be stopped at next interrupt */

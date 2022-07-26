@@ -203,7 +203,7 @@ void main_message(m64p_msg_level level, unsigned int corner, const char *format,
 }
 
 extern retro_input_poll_t poll_cb;
-static void main_check_inputs(void)
+void main_check_inputs(void)
 {
 
         // Input Polling will be forced to early if Threaded GLideN64
@@ -218,118 +218,9 @@ int main_set_core_defaults(void)
     return 1;
 }
 
-void main_speeddown(int percent)
-{
-
-    if (l_SpeedFactor - percent > 10)  /* 10% minimum speed */
-    {
-        l_SpeedFactor -= percent;
-        audio.setSpeedFactor(l_SpeedFactor);
-        StateChanged(M64CORE_SPEED_FACTOR, l_SpeedFactor);
-    }
-}
-
-void main_speedup(int percent)
-{
-
-    if (l_SpeedFactor + percent < 300) /* 300% maximum speed */
-    {
-        l_SpeedFactor += percent;
-        audio.setSpeedFactor(l_SpeedFactor);
-        StateChanged(M64CORE_SPEED_FACTOR, l_SpeedFactor);
-    }
-}
-
-static void main_speedset(int percent)
-{
-
-    if (percent < 1 || percent > 1000)
-    {
-        DebugMessage(M64MSG_WARNING, "Invalid speed setting %i percent", percent);
-        return;
-    }
-    // disable fast-forward if it's enabled
-    main_set_fastforward(0);
-    // set speed
-    l_SpeedFactor = percent;
-    audio.setSpeedFactor(l_SpeedFactor);
-    StateChanged(M64CORE_SPEED_FACTOR, l_SpeedFactor);
-}
-
-void main_set_fastforward(int enable)
-{
-
-    static int ff_state = 0;
-    static int SavedSpeedFactor = 100;
-
-    if (enable && !ff_state)
-    {
-        ff_state = 1; /* activate fast-forward */
-        SavedSpeedFactor = l_SpeedFactor;
-        l_SpeedFactor = 250;
-        audio.setSpeedFactor(l_SpeedFactor);
-        StateChanged(M64CORE_SPEED_FACTOR, l_SpeedFactor);
-    }
-    else if (!enable && ff_state)
-    {
-        ff_state = 0; /* de-activate fast-forward */
-        l_SpeedFactor = SavedSpeedFactor;
-        audio.setSpeedFactor(l_SpeedFactor);
-        StateChanged(M64CORE_SPEED_FACTOR, l_SpeedFactor);
-    }
-
-}
-
-static void main_set_speedlimiter(int enable)
-{
-
-    l_MainSpeedLimit = enable ? 1 : 0;
-}
-
 static int main_is_paused(void)
 {
     return (g_EmulatorRunning && g_rom_pause);
-}
-
-void main_toggle_pause(void)
-{
-    if (!g_EmulatorRunning)
-        return;
-
-
-
-    if (g_rom_pause)
-    {
-        DebugMessage(M64MSG_STATUS, "Emulation continued.");
-        StateChanged(M64CORE_EMU_STATE, M64EMU_RUNNING);
-    }
-    else
-    {
-        DebugMessage(M64MSG_STATUS, "Emulation paused.");
-        StateChanged(M64CORE_EMU_STATE, M64EMU_PAUSED);
-    }
-
-    g_rom_pause = !g_rom_pause;
-    l_FrameAdvance = 0;
-}
-
-void main_advance_one(void)
-{
-    l_FrameAdvance = 1;
-    g_rom_pause = 0;
-    StateChanged(M64CORE_EMU_STATE, M64EMU_RUNNING);
-}
-
-static void main_draw_volume_osd(void)
-{
-    return;
-}
-
-/* this function could be called as a result of a keypress, joystick/button movement,
-   LIRC command, or 'testshots' command-line option timer */
-void main_take_next_screenshot(void)
-{
-    l_TakeScreenshot = l_CurrentFrame + 1;
 }
 
 void main_state_set_slot(int slot)
@@ -405,10 +296,10 @@ m64p_error main_core_state_query(m64p_core_param param, int *rval)
         {
             if (!g_EmulatorRunning)
                 return M64ERR_INVALID_STATE;    
-            return main_volume_get_level(rval);
+            return 100;
         }
         case M64CORE_AUDIO_MUTE:
-            *rval = main_volume_get_muted();
+            *rval = 0;
             break;
         case M64CORE_INPUT_GAMESHARK:
             *rval = event_gameshark_active();
@@ -439,14 +330,10 @@ m64p_error main_core_state_set(m64p_core_param param, int val)
             }
             else if (val == M64EMU_RUNNING)
             {
-                if (main_is_paused())
-                    main_toggle_pause();
                 return M64ERR_SUCCESS;
             }
             else if (val == M64EMU_PAUSED)
             {    
-                if (!main_is_paused())
-                    main_toggle_pause();
                 return M64ERR_SUCCESS;
             }
             return M64ERR_INPUT_INVALID;
@@ -463,10 +350,8 @@ m64p_error main_core_state_set(m64p_core_param param, int val)
         case M64CORE_SPEED_FACTOR:
             if (!g_EmulatorRunning)
                 return M64ERR_INVALID_STATE;
-            main_speedset(val);
             return M64ERR_SUCCESS;
         case M64CORE_SPEED_LIMITER:
-            main_set_speedlimiter(val);
             return M64ERR_SUCCESS;
         case M64CORE_VIDEO_SIZE:
         {
@@ -483,14 +368,8 @@ m64p_error main_core_state_set(m64p_core_param param, int val)
             return M64ERR_SUCCESS;
         }
         case M64CORE_AUDIO_VOLUME:
-            if (!g_EmulatorRunning)
-                return M64ERR_INVALID_STATE;
-            if (val < 0 || val > 100)
-                return M64ERR_INPUT_INVALID;
-            return main_volume_set_level(val);
+            return M64ERR_SUCCESS;
         case M64CORE_AUDIO_MUTE:
-            if ((main_volume_get_muted() && !val) || (!main_volume_get_muted() && val))
-                return main_volume_mute();
             return M64ERR_SUCCESS;
         case M64CORE_INPUT_GAMESHARK:
             if (!g_EmulatorRunning)
@@ -510,57 +389,6 @@ m64p_error main_get_screen_size(int *width, int *height)
 {
     gfx.readScreen(NULL, width, height, 0);
     return M64ERR_SUCCESS;
-}
-
-m64p_error main_read_screen(void *pixels, int bFront)
-{
-    int width_trash, height_trash;
-    gfx.readScreen(pixels, &width_trash, &height_trash, bFront);
-    return M64ERR_SUCCESS;
-}
-
-m64p_error main_volume_up(void)
-{
-    int level = 0;
-    audio.volumeUp();
-    main_volume_get_level(&level);
-    StateChanged(M64CORE_AUDIO_VOLUME, level);
-    return M64ERR_SUCCESS;
-}
-
-m64p_error main_volume_down(void)
-{
-    int level = 0;
-    audio.volumeDown();
-    main_volume_get_level(&level);
-    StateChanged(M64CORE_AUDIO_VOLUME, level);
-    return M64ERR_SUCCESS;
-}
-
-m64p_error main_volume_get_level(int *level)
-{
-    *level = audio.volumeGetLevel();
-    return M64ERR_SUCCESS;
-}
-
-m64p_error main_volume_set_level(int level)
-{
-    audio.volumeSetLevel(level);
-    level = audio.volumeGetLevel();
-    StateChanged(M64CORE_AUDIO_VOLUME, level);
-    return M64ERR_SUCCESS;
-}
-
-m64p_error main_volume_mute(void)
-{
-    audio.volumeMute();
-    StateChanged(M64CORE_AUDIO_MUTE, main_volume_get_muted());
-    return M64ERR_SUCCESS;
-}
-
-int main_volume_get_muted(void)
-{
-    return (audio.volumeGetLevel() == 0);
 }
 
 m64p_error main_reset(int do_hard_reset)
@@ -600,107 +428,6 @@ void new_frame(void)
         g_rom_pause = 1;
         l_FrameAdvance = 0;
         StateChanged(M64CORE_EMU_STATE, M64EMU_PAUSED);
-    }
-}
-
-/*
-#define SAMPLE_COUNT 1
-static void apply_speed_limiter(void)
-{
-    static unsigned long totalVIs = 0;
-    static int resetOnce = 0;
-    static int lastSpeedFactor = 100;
-    static unsigned int StartFPSTime = 0;
-    static const double defaultSpeedFactor = 100.0;
-#ifdef HAVE_LIBNX
-    unsigned int CurrentFPSTime = armTicksToNs(armGetSystemTick()) / 1000000;
-#else
-    unsigned int CurrentFPSTime = SDL_GetTicks();
-#endif // HAVE_LIBNX
-    static double sleepTimes[SAMPLE_COUNT];
-    static unsigned int sleepTimesIndex = 0;
-
-    // calculate frame duration based upon ROM setting (50/60hz) and mupen64plus speed adjustment
-    const double VILimitMilliseconds = 1000.0 / g_dev.vi.expected_refresh_rate;
-    const double SpeedFactorMultiple = defaultSpeedFactor/l_SpeedFactor;
-    const double AdjustedLimit = VILimitMilliseconds * SpeedFactorMultiple;
-    
-    //if this is the first time or we are resuming from pause
-    if(StartFPSTime == 0 || !resetOnce || lastSpeedFactor != l_SpeedFactor)
-    {
-       StartFPSTime = CurrentFPSTime;
-       totalVIs = 0;
-       resetOnce = 1;
-    }
-    else
-    {
-        ++totalVIs;
-    }
-
-    lastSpeedFactor = l_SpeedFactor;
-
-#if defined(PROFILE)
-    timed_section_start(TIMED_SECTION_IDLE);
-#endif
-
-#ifdef DBG
-    if(g_DebuggerActive) DebuggerCallback(DEBUG_UI_VI, 0);
-#endif
-
-    double totalElapsedGameTime = AdjustedLimit*totalVIs;
-    double elapsedRealTime = CurrentFPSTime - StartFPSTime;
-    double sleepTime = totalElapsedGameTime - elapsedRealTime;
-
-    //Reset if the sleep needed is an unreasonable value
-    static const double minSleepNeeded = -50;
-    static const double maxSleepNeeded = 50;
-    if(sleepTime < minSleepNeeded || sleepTime > (maxSleepNeeded*SpeedFactorMultiple))
-    {
-       resetOnce = 0;
-    }
-
-    sleepTimes[sleepTimesIndex%SAMPLE_COUNT] = sleepTime;
-    sleepTimesIndex++;
-
-    unsigned int elementsForAverage = sleepTimesIndex > SAMPLE_COUNT ? SAMPLE_COUNT : sleepTimesIndex;
-
-    // compute the average sleepTime
-    double sum = 0;
-    unsigned int index;
-    for(index = 0; index < elementsForAverage; index++)
-    {
-        sum += sleepTimes[index];
-    }
-
-    double averageSleep = sum/elementsForAverage;
-
-    int sleepMs = (int)averageSleep;
-
-    if(sleepMs > 0 && l_MainSpeedLimit)
-    {
-       //DebugMessage(M64MSG_VERBOSE, "    apply_speed_limiter(): Waiting %ims", sleepMs);
-#ifdef HAVE_LIBNX
-       svcSleepThread(sleepMs * 1000000);
-#else
-       SDL_Delay(sleepMs);
-#endif // HAVE_LIBNX
-    }
-
-
-#if defined(PROFILE)
-    timed_section_end(TIMED_SECTION_IDLE);
-#endif
-}
-*/
-
-static void pause_loop(void)
-{
-    if(g_rom_pause)
-    {
-        while(g_rom_pause)
-        {
-            main_check_inputs();
-        }
     }
 }
 
@@ -1198,8 +925,6 @@ struct file_storage eep;
 
     /* XXX: select type of flashram from db */
     uint32_t flashram_type = MX29L1100_ID;
-
-bool breakloop=false;
     
 
 void main_prerun(void)
@@ -1486,25 +1211,13 @@ void main_prerun(void)
 
     poweron_device(&g_dev);
     pif_bootrom_hle_execute(&g_dev.r4300);
-    breakloop = false;
 
-}
-
-void new_vi(void)
-{
-    // apply_speed_limiter();
-    main_check_inputs();
-    breakloop=true;
 }
 
 m64p_error main_run(void)
 {
    if(!*r4300_stop(&g_dev.r4300))
-   {
-   while(!breakloop)
-   run_device(&g_dev);
-   }
-   breakloop=false;
+   run_r4300(&g_dev.r4300);
    return M64ERR_SUCCESS;
 }
 
