@@ -62,7 +62,7 @@ struct
 {
     CONTROL *control;               // pointer to CONTROL struct in Core library
     BUTTONS buttons;
-} controller[4];
+} controller[2];
 
 void inputGetKeys_default( int Control, BUTTONS *Keys );
 typedef void (*get_keys_t)(int, BUTTONS*);
@@ -91,6 +91,7 @@ static void inputGetKeys_default_descriptor(void)
 
       static struct retro_input_descriptor desc[] = {
          independent_cbuttons_map(0)
+         independent_cbuttons_map(1)
       };
       environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
 }
@@ -319,7 +320,7 @@ EXPORT void CALL inputInitiateControllers(CONTROL_INFO ControlInfo)
 {
     int i;
 
-    for( i = 0; i < 4; i++ )
+    for( i = 0; i < 2; i++ )
     {
        controller[i].control = ControlInfo.Controls + i;
        controller[i].control->Present = pad_present[i];

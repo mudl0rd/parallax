@@ -137,7 +137,7 @@ extern struct
 {
     CONTROL *control;
     BUTTONS buttons;
-} controller[4];
+} controller[2];
 // ...but it won't be at least the first time we're called, in that case set
 // these instead for input_plugin to read.
 int pad_pak_types[4];
@@ -510,40 +510,6 @@ void update_controllers()
             controller[1].control->Plugin = p2_pak;
         else
             pad_pak_types[1] = p2_pak;
-    }
-
-    struct retro_variable pk3var = { CORE_NAME "-pak3" };
-    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &pk3var) && pk3var.value)
-    {
-        int p3_pak = PLUGIN_NONE;
-        if (!strcmp(pk3var.value, "rumble"))
-            p3_pak = PLUGIN_RAW;
-        else if (!strcmp(pk3var.value, "memory"))
-            p3_pak = PLUGIN_MEMPAK;
-        else if (!strcmp(pk3var.value, "transfer"))
-            p3_pak = PLUGIN_TRANSFER_PAK;
-
-        if (controller[2].control)
-            controller[2].control->Plugin = p3_pak;
-        else
-            pad_pak_types[2] = p3_pak;
-    }
-
-    struct retro_variable pk4var = { CORE_NAME "-pak4" };
-    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &pk4var) && pk4var.value)
-    {
-        int p4_pak = PLUGIN_NONE;
-        if (!strcmp(pk4var.value, "rumble"))
-            p4_pak = PLUGIN_RAW;
-        else if (!strcmp(pk4var.value, "memory"))
-            p4_pak = PLUGIN_MEMPAK;
-        else if (!strcmp(pk4var.value, "transfer"))
-            p4_pak = PLUGIN_TRANSFER_PAK;
-
-        if (controller[3].control)
-            controller[3].control->Plugin = p4_pak;
-        else
-            pad_pak_types[3] = p4_pak;
     }
 }
 
