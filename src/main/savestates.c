@@ -49,7 +49,6 @@
 #include "rom.h"
 #include "savestates.h"
 #include "util.h"
-#include "workqueue.h"
 
 enum { GB_CART_FINGERPRINT_SIZE = 0x1c };
 enum { GB_CART_FINGERPRINT_OFFSET = 0x134 };
@@ -900,25 +899,12 @@ int savestates_load(void)
     return ret;
 }
 
-static void savestates_save_m64p_work(struct work_struct *work)
-{
-    struct savestate_work *save = container_of(work, struct savestate_work, work);
-    pthread_mutex_lock(&savestates_lock);
-
-    memcpy(save->mempointer, save->data, save->size);
-    free(save->data);
-    free(save);
-    pthread_mutex_unlock(&savestates_lock);
-}
-
 int savestates_save_m64p(const struct device* dev, void *data)
 {
     unsigned char outbuf[4];
     int i;
 
     char queue[1024];
-
-    struct savestate_work *save;
     char *curr;
 
     /* OK to cast away const qualifier */
@@ -1294,8 +1280,9 @@ int savestates_save_m64p(const struct device* dev, void *data)
     PUTDATA(curr, uint16_t, dev->cart.flashram.erase_page);
     PUTDATA(curr, uint16_t, dev->cart.flashram.mode);
 
-    init_work(&save->work, savestates_save_m64p_work);
-    queue_work(&save->work);
+    memcpy(save->mempointer, save->data, save->size);
+    free(save->data);
+    free(save);
 
     return 1;
 }

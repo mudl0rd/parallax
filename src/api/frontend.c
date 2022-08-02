@@ -40,7 +40,6 @@
 #include "main/savestates.h"
 #include "main/util.h"
 #include "main/version.h"
-#include "main/workqueue.h"
 #include "plugin/plugin.h"
 #include "vidext.h"
 
@@ -81,8 +80,6 @@ EXPORT m64p_error CALL CoreStartup(int APIVersion, const char *ConfigPath, const
     /* The ROM database contains MD5 hashes, goodnames, and some game-specific parameters */
     romdatabase_open();
 
-    workqueue_init();
-
     l_CoreInit = 1;
     return M64ERR_SUCCESS;
 }
@@ -95,7 +92,6 @@ EXPORT m64p_error CALL CoreShutdown(void)
     /* close down some core sub-systems */
     romdatabase_close();
     ConfigShutdown();
-    workqueue_shutdown();
     savestates_deinit();
 
     /* deallocate base memory */

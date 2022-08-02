@@ -162,15 +162,12 @@ static void setup_variables(void)
 {
 
     static const struct retro_controller_description port[] = {
-        { "Controller", RETRO_DEVICE_JOYPAD },
-        { "RetroPad", RETRO_DEVICE_JOYPAD },
+        { "Controller", RETRO_DEVICE_JOYPAD }
     };
 
     static const struct retro_controller_info ports[] = {
-        { port, 2 },
-        { port, 2 },
-        { port, 2 },
-        { port, 2 },
+        { port, 1 },
+        { port, 1 },
         { 0, 0 }
     };
 
