@@ -265,13 +265,6 @@ DECLARE_INSTRUCTION(NI)
 
 /* Reserved */
 
-DECLARE_INSTRUCTION(RESERVED)
-{
-    DECLARE_R4300
-    DebugMessage(M64MSG_ERROR, "reserved opcode: %" PRIX32 ":%" PRIX32, PCADDR, *fast_mem_access(r4300, PCADDR));
-    *r4300_stop(r4300) = 1;
-}
-
 /* Load instructions */
 
 DECLARE_INSTRUCTION(LB)
@@ -2384,7 +2377,7 @@ void InterpretOpcode(struct r4300_core* r4300)
 			break;
 		default: /* SPECIAL opcodes 1, 5, 10, 11, 14, 21, 40, 41, 53, 55, 57,
 		            61: Reserved Instructions */
-			RESERVED(r4300, op);
+			__builtin_unreachable();
 			break;
 		} /* switch (op & 0x3F) for the SPECIAL prefix */
 		break;
@@ -2430,7 +2423,7 @@ void InterpretOpcode(struct r4300_core* r4300)
 			break;
 		default: /* REGIMM opcodes 4..7, 13, 15, 20..31:
 		            Reserved Instructions */
-			RESERVED(r4300, op);
+			__builtin_unreachable();
 			break;
 		} /* switch ((op >> 16) & 0x1F) for the REGIMM prefix */
 		break;
@@ -2506,13 +2499,13 @@ void InterpretOpcode(struct r4300_core* r4300)
 			case 24: ERET(r4300, op); break;
 			default: /* TLB sub-opcodes 0, 3..5, 7, 9..23, 25..63:
 			            Reserved Instructions */
-				RESERVED(r4300, op);
+				__builtin_unreachable();
 				break;
 			} /* switch (op & 0x3F) for Coprocessor 0 TLB opcodes */
 			break;
 		default: /* Coprocessor 0 opcodes 1..3, 4..15, 17..31:
 		            Reserved Instructions */
-			RESERVED(r4300, op);
+			__builtin_unreachable();
 			break;
 		} /* switch ((op >> 21) & 0x1F) for the Coprocessor 0 prefix */
 		break;
@@ -2592,7 +2585,7 @@ void InterpretOpcode(struct r4300_core* r4300)
 			case 63: C_NGT_S(r4300, op); break;
 			default: /* Coprocessor 1 S-format opcodes 16..32, 34..35, 38..47:
 			            Reserved Instructions */
-				RESERVED(r4300, op);
+				__builtin_unreachable();
 				break;
 			} /* switch (op & 0x3F) for Coprocessor 1 S-format opcodes */
 			break;
@@ -2635,7 +2628,7 @@ void InterpretOpcode(struct r4300_core* r4300)
 			case 63: C_NGT_D(r4300, op); break;
 			default: /* Coprocessor 1 D-format opcodes 16..31, 33..35, 38..47:
 			            Reserved Instructions */
-				RESERVED(r4300, op);
+				__builtin_unreachable();
 				break;
 			} /* switch (op & 0x3F) for Coprocessor 1 D-format opcodes */
 			break;
@@ -2645,7 +2638,7 @@ void InterpretOpcode(struct r4300_core* r4300)
 			case 33: CVT_D_W(r4300, op); break;
 			default: /* Coprocessor 1 W-format opcodes 0..31, 34..63:
 			            Reserved Instructions */
-				RESERVED(r4300, op);
+				__builtin_unreachable();
 				break;
 			}
 			break;
@@ -2655,13 +2648,13 @@ void InterpretOpcode(struct r4300_core* r4300)
 			case 33: CVT_D_L(r4300, op); break;
 			default: /* Coprocessor 1 L-format opcodes 0..31, 34..63:
 			            Reserved Instructions */
-				RESERVED(r4300, op);
+				__builtin_unreachable();
 				break;
 			}
 			break;
 		default: /* Coprocessor 1 opcodes 3, 7, 9..15, 18..19, 22..31:
 		            Reserved Instructions */
-			RESERVED(r4300, op);
+			__builtin_unreachable();
 			break;
 		} /* switch ((op >> 21) & 0x1F) for the Coprocessor 1 prefix */
 		break;
@@ -2762,7 +2755,7 @@ void InterpretOpcode(struct r4300_core* r4300)
 	case 63: SD(r4300, op); break;
 	default: /* Major opcodes 18..19, 28..31, 50..51, 54, 58..59, 62:
 	            Reserved Instructions */
-		RESERVED(r4300, op);
+		__builtin_unreachable();
 		break;
 	} /* switch ((op >> 26) & 0x3F) */
 }

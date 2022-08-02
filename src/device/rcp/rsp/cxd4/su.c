@@ -1788,7 +1788,7 @@ static INLINE int SPECIAL(u32 inst, u32 PC)
         SR[zero] = 0x00000000;
         break;
     default:
-        res_S();
+       __builtin_unreachable();
     }
     return 0;
 }
@@ -1816,7 +1816,7 @@ static INLINE int REGIMM(u32 inst, u32 PC)
         set_PC(PC + 4*inst + SLOT_OFF);
         break;
     default:
-        res_S();
+        __builtin_unreachable();
     }
     return 1;
 }
@@ -1868,7 +1868,7 @@ static INLINE void COP0(u32 inst)
         SP_CP0_MT[rd % NUMBER_OF_CP0_REGISTERS](rt);
         break;
     default:
-        res_S();
+        __builtin_unreachable();
     }
 }
 
@@ -1980,7 +1980,7 @@ static INLINE void COP2(u32 inst)
 #endif
         break;
     default:
-        res_S();
+        __builtin_unreachable();
     }
 }
 
@@ -2100,7 +2100,7 @@ EX:
             MWC2_store(inst_word);
             break;
         default:
-            res_S();
+            __builtin_unreachable();
         }
 
 #ifndef EMULATE_STATIC_PC
