@@ -42,7 +42,6 @@
 #include "api/callbacks.h"
 #include "main/version.h"
 #include "main/util.h"
-#include "main/savestates.h"
 #include "main/mupen64plus.ini.h"
 #include "api/m64p_config.h"
 #include "osal_files.h"
@@ -107,10 +106,6 @@ bool libretro_swap_buffer;
 float retro_screen_aspect = 4.0 / 3.0;
 
 static char rdp_plugin_last[32] = {0};
-
-// Savestate globals
-bool retro_savestate_complete = false;
-int  retro_savestate_result = 0;
 
 // 64DD globals
 char* retro_dd_path_img = NULL;
@@ -204,11 +199,6 @@ static void cleanup_global_paths()
 
 static void n64StateCallback(void *Context, m64p_core_param param_type, int new_value)
 {
-    if(param_type == M64CORE_STATE_LOADCOMPLETE || param_type == M64CORE_STATE_SAVECOMPLETE)
-    {
-        retro_savestate_complete = true;
-        retro_savestate_result = new_value;
-    }
 }
 
 static bool emu_step_load_data()
@@ -634,7 +624,6 @@ bool retro_load_game(const struct retro_game_info *game)
     }
  
     // Init default vals
-    retro_savestate_complete = true;
     load_game_successful = false;
 
  
@@ -663,9 +652,6 @@ void retro_unload_game(void)
     cleanup_global_paths();
     
     emu_initialized = false;
-
-    // Reset savestate job var
-    retro_savestate_complete = false;
 }
 
 void update_variables(bool startup)
@@ -742,28 +728,12 @@ size_t retro_serialize_size (void)
 
 bool retro_serialize(void *data, size_t size)
 {
-   if (initializing)
-      return false;
-
-   retro_savestate_complete = false;
-   retro_savestate_result = 0;
-
-   savestates_set_job(savestates_job_save, savestates_type_m64p, data);
-
-   return !!retro_savestate_result;
+    return false;
 }
 
 bool retro_unserialize(const void *data, size_t size)
 {
-   if (initializing)
-      return false;
-
-   retro_savestate_complete = false;
-   retro_savestate_result = 0;
-
-   savestates_set_job(savestates_job_load, savestates_type_m64p, data);
-
-   return true;
+    return false;
 }
 
 //Needed to be able to detach controllers for Lylat Wars multiplayer

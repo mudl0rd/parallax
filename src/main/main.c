@@ -68,7 +68,6 @@
 #include "profile.h"
 #endif
 #include "rom.h"
-#include "savestates.h"
 #include "util.h"
 
 #include <libretro_private.h>
@@ -223,42 +222,6 @@ static int main_is_paused(void)
     return (g_EmulatorRunning && g_rom_pause);
 }
 
-void main_state_set_slot(int slot)
-{
-    if (slot < 0 || slot > 9)
-    {
-        DebugMessage(M64MSG_WARNING, "Invalid savestate slot '%i' in main_state_set_slot().  Using 0", slot);
-        slot = 0;
-    }
-
-    savestates_select_slot(slot);
-}
-
-void main_state_inc_slot(void)
-{
-    savestates_inc_slot();
-}
-
-void main_state_load(const char *filename)
-{
-
-
-    if (filename == NULL) // Save to slot
-        savestates_set_job(savestates_job_load, savestates_type_m64p, NULL);
-    else
-        savestates_set_job(savestates_job_load, savestates_type_unknown, filename);
-}
-
-void main_state_save(int format, const char *filename)
-{
-
-
-    if (filename == NULL) // Save to slot
-        savestates_set_job(savestates_job_save, savestates_type_m64p, NULL);
-    else // Save to file
-        savestates_set_job(savestates_job_save, (savestates_type)format, filename);
-}
-
 m64p_error main_core_state_query(m64p_core_param param, int *rval)
 {
     switch (param)
@@ -273,9 +236,6 @@ m64p_error main_core_state_query(m64p_core_param param, int *rval)
             break;
         case M64CORE_VIDEO_MODE:
                 *rval = M64VIDEO_FULLSCREEN;
-            break;
-        case M64CORE_SAVESTATE_SLOT:
-            *rval = savestates_get_slot();
             break;
         case M64CORE_SPEED_FACTOR:
             *rval = l_SpeedFactor;
@@ -305,9 +265,6 @@ m64p_error main_core_state_query(m64p_core_param param, int *rval)
             *rval = event_gameshark_active();
             break;
         // these are only used for callbacks; they cannot be queried or set
-        case M64CORE_STATE_LOADCOMPLETE:
-        case M64CORE_STATE_SAVECOMPLETE:
-            return M64ERR_INPUT_INVALID;
         default:
             return M64ERR_INPUT_INVALID;
     }
@@ -342,11 +299,6 @@ m64p_error main_core_state_set(m64p_core_param param, int val)
                 return M64ERR_INVALID_STATE;
             gfx.changeWindow();
             return M64ERR_SUCCESS;
-        case M64CORE_SAVESTATE_SLOT:
-            if (val < 0 || val > 9)
-                return M64ERR_INPUT_INVALID;
-            savestates_select_slot(val);
-            return M64ERR_SUCCESS;
         case M64CORE_SPEED_FACTOR:
             if (!g_EmulatorRunning)
                 return M64ERR_INVALID_STATE;
@@ -377,8 +329,6 @@ m64p_error main_core_state_set(m64p_core_param param, int val)
             event_set_gameshark(val);
             return M64ERR_SUCCESS;
         // these are only used for callbacks; they cannot be queried or set
-        case M64CORE_STATE_LOADCOMPLETE:
-        case M64CORE_STATE_SAVECOMPLETE:
             return M64ERR_INPUT_INVALID;
         default:
             return M64ERR_INPUT_INVALID;

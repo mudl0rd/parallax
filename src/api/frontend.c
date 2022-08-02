@@ -37,7 +37,6 @@
 #include "main/eventloop.h"
 #include "main/main.h"
 #include "main/rom.h"
-#include "main/savestates.h"
 #include "main/util.h"
 #include "main/version.h"
 #include "plugin/plugin.h"
@@ -92,7 +91,6 @@ EXPORT m64p_error CALL CoreShutdown(void)
     /* close down some core sub-systems */
     romdatabase_close();
     ConfigShutdown();
-    savestates_deinit();
 
     /* deallocate base memory */
     release_mem_base(g_mem_base);
@@ -199,26 +197,6 @@ EXPORT m64p_error CALL CoreDoCommand(m64p_command Command, int ParamInt, void *P
             if (!g_EmulatorRunning)
                 return M64ERR_INVALID_STATE;
             return main_core_state_set(M64CORE_EMU_STATE, M64EMU_RUNNING);
-        case M64CMD_CORE_STATE_QUERY:
-            if (ParamPtr == NULL)
-                return M64ERR_INPUT_ASSERT;
-            return main_core_state_query((m64p_core_param) ParamInt, (int *) ParamPtr);
-        case M64CMD_CORE_STATE_SET:
-            if (ParamPtr == NULL)
-                return M64ERR_INPUT_ASSERT;
-            return main_core_state_set((m64p_core_param) ParamInt, *((int *)ParamPtr));
-        case M64CMD_STATE_LOAD:
-            return M64ERR_SUCCESS;
-        case M64CMD_STATE_SAVE:
-            if (!g_EmulatorRunning)
-                return M64ERR_INVALID_STATE;
-            if (ParamPtr != NULL && (ParamInt < 1 || ParamInt > 3))
-                return M64ERR_INPUT_INVALID;
-            return M64ERR_SUCCESS;
-        case M64CMD_STATE_SET_SLOT:
-            if (ParamInt < 0 || ParamInt > 9)
-                return M64ERR_INPUT_INVALID;
-            return main_core_state_set(M64CORE_SAVESTATE_SLOT, ParamInt);
         case M64CMD_SEND_SDL_KEYDOWN:
             if (!g_EmulatorRunning)
                 return M64ERR_INVALID_STATE;

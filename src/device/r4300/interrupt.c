@@ -41,7 +41,6 @@
 #include "device/rcp/ai_controller.h"
 #include "device/rcp/rdp/vi_controller.h"
 #include "main/main.h"
-#include "main/savestates.h"
 
 
 /***************************************************************************
@@ -504,11 +503,6 @@ void gen_interrupt(struct r4300_core* r4300)
 
     if (!r4300->cp0.interrupt_unsafe_state)
     {
-        if (savestates_get_job() == savestates_job_load)
-        {
-            savestates_load();
-            return;
-        }
 
         if (r4300->reset_hard_job)
         {
@@ -600,15 +594,6 @@ void gen_interrupt(struct r4300_core* r4300)
             remove_interrupt_event(&r4300->cp0);
             exception_general(r4300);
             break;
-    }
-
-    if (!r4300->cp0.interrupt_unsafe_state)
-    {
-        if (savestates_get_job() == savestates_job_save)
-        {
-            savestates_save();
-            return;
-        }
     }
 }
 

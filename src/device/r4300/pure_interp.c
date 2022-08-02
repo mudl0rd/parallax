@@ -2222,12 +2222,6 @@ void new_vi(void)
 
 void InterpretOpcode(struct r4300_core* r4300)
 {
-    while(!breakloop)
-	{
-
-	
-    loop1:
-
 	uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));
 	if (op_address == NULL)
 		return;
@@ -2771,8 +2765,6 @@ void InterpretOpcode(struct r4300_core* r4300)
 		RESERVED(r4300, op);
 		break;
 	} /* switch ((op >> 26) & 0x3F) */
-
-	}
 }
 
 void run_r4300(struct r4300_core* r4300)
