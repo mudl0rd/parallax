@@ -40,9 +40,7 @@ bool vk_interlacing;
 bool skip_swap_clear;
 static bool vk_initialized;
 
-#ifdef _WIN32
-#include <intrin.h>
-#endif
+#include <immintrin.h>
 
 inline unsigned long rotatel(unsigned long X, int C)
 {
@@ -127,8 +125,8 @@ void rgba2bgra(const void *source, void *dest, unsigned int width, unsigned int 
 	for (y = 0; y < height; y++)
 	{
 		// Start of buffer
-		auto src = static_cast<const unsigned __int32 *>(source); // unsigned int = 4 bytes
-		auto dst = static_cast<unsigned __int32 *>(dest);
+		auto src = static_cast<const unsigned int32_t *>(source); // unsigned int = 4 bytes
+		auto dst = static_cast<unsigned int32_t *>(dest);
 		// Cast first to avoid warning C26451: Arithmetic overflow
 		unsigned long YxW = (unsigned long)(y * width);
 		src += YxW;
@@ -193,7 +191,7 @@ void vk_blit(unsigned &width, unsigned &height)
 		retro_pitch = height * sizeof(uint32_t);
 
 		scanout.fence->wait();
-		uint8_t *ptr = device->map_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
+		uint8_t *ptr = (uint8_t*)device->map_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
 		rgba2bgra(ptr, prescale, retro_width, retro_height);
 		device->unmap_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
 	}
