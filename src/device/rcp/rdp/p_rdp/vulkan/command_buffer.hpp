@@ -168,7 +168,7 @@ using CommandBufferSaveStateFlags = uint32_t;
 
 struct CommandBufferSavedState
 {
-	CommandBufferSaveStateFlags flags = 0;
+	CommandBufferSaveStateFlags flags;
 	ResourceBindings bindings;
 	VkViewport viewport;
 	VkRect2D scissor;
@@ -319,6 +319,13 @@ public:
 	                     unsigned buffer_barriers, const VkBufferMemoryBarrier *buffers);
 	void image_barriers(VkPipelineStageFlags src_stages, VkPipelineStageFlags dst_stages,
 	                    unsigned image_barriers, const VkImageMemoryBarrier *images);
+
+	void release_external_buffer_barrier(const Buffer &buffer, VkPipelineStageFlags src_stage, VkAccessFlags src_access);
+	void acquire_external_buffer_barrier(const Buffer &buffer, VkPipelineStageFlags dst_stage, VkAccessFlags dst_access);
+	void release_external_image_barrier(const Image &image, VkImageLayout old_layout, VkImageLayout new_layout,
+	                                    VkPipelineStageFlags src_stage, VkAccessFlags src_access);
+	void acquire_external_image_barrier(const Image &image, VkImageLayout old_layout, VkImageLayout new_layout,
+	                                    VkPipelineStageFlags dst_stage, VkAccessFlags dst_access);
 
 	void blit_image(const Image &dst,
 	                const Image &src,
@@ -675,11 +682,15 @@ public:
 	void end_debug_channel();
 
 	void extract_pipeline_state(DeferredPipelineCompile &compile) const;
-	static VkPipeline build_graphics_pipeline(Device *device, const DeferredPipelineCompile &compile,
-	                                          bool synchronous = true);
-	static VkPipeline build_compute_pipeline(Device *device, const DeferredPipelineCompile &compile,
-	                                         bool synchronous = true);
 
+	enum class CompileMode
+	{
+		Sync,
+		FailOnCompileRequired,
+		AsyncThread
+	};
+	static Pipeline build_graphics_pipeline(Device *device, const DeferredPipelineCompile &compile, CompileMode mode);
+	static Pipeline build_compute_pipeline(Device *device, const DeferredPipelineCompile &compile, CompileMode mode);
 	bool flush_pipeline_state_without_blocking();
 
 private:
@@ -701,7 +712,7 @@ private:
 	VkDescriptorSet bindless_sets[VULKAN_NUM_DESCRIPTOR_SETS] = {};
 	VkDescriptorSet allocated_sets[VULKAN_NUM_DESCRIPTOR_SETS] = {};
 
-	VkPipeline current_pipeline = VK_NULL_HANDLE;
+	Pipeline current_pipeline = {};
 	VkPipelineLayout current_pipeline_layout = VK_NULL_HANDLE;
 	PipelineLayout *current_layout = nullptr;
 	VkSubpassContents current_contents = VK_SUBPASS_CONTENTS_INLINE;
@@ -770,6 +781,8 @@ private:
 	std::string debug_channel_tag;
 	Vulkan::BufferHandle debug_channel_buffer;
 	DebugChannelInterface *debug_channel_interface = nullptr;
+
+	void bind_pipeline(VkPipelineBindPoint bind_point, VkPipeline pipeline, uint32_t active_dynamic_state);
 
 	static void update_hash_graphics_pipeline(DeferredPipelineCompile &compile, uint32_t &active_vbos);
 	static void update_hash_compute_pipeline(DeferredPipelineCompile &compile);
