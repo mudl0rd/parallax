@@ -855,7 +855,6 @@ extern input_plugin_functions dummy_input;
 extern audio_plugin_functions dummy_audio;
 
 unsigned int r4300_emumode;
-size_t rdram_size;
 
 struct file_storage eep;
     struct file_storage fla;
@@ -907,8 +906,6 @@ void main_prerun(void)
 
     if (ForceDisableExtraMem == 1)
         disable_extra_mem = 1;
-
-    rdram_size = (disable_extra_mem == 0) ? 0x800000 : 0x400000;
 
     if (count_per_op <= 0)
         count_per_op = ROM_SETTINGS.countperop;
@@ -1134,7 +1131,7 @@ void main_prerun(void)
                 g_start_address,
                 &g_dev.ai, &audio_out_backend_libretro,
                 si_dma_duration,
-                rdram_size,
+                0x800000,
                 joybus_devices, ijoybus_devices,
                 vi_clock_from_tv_standard(ROM_PARAMS.systemtype), vi_expected_refresh_rate_from_tv_standard(ROM_PARAMS.systemtype),
                 NULL, &g_iclock_ctime_plus_delta,
