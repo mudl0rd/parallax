@@ -75,7 +75,10 @@ void Device::register_render_pass(VkRenderPass render_pass, Fossilize::Hash hash
 bool Device::enqueue_create_shader_module(Fossilize::Hash hash, const VkShaderModuleCreateInfo *create_info, VkShaderModule *module)
 {
 	if (!replayer_state.feature_filter->shader_module_is_supported(create_info))
-		return false;
+	{
+		*module = VK_NULL_HANDLE;
+		return true;
+	}
 
 	ResourceLayout layout;
 	Shader *ret;
@@ -134,11 +137,42 @@ VkPipeline Device::fossilize_create_graphics_pipeline(Fossilize::Hash hash, VkGr
 	LOGI("Replaying graphics pipeline.\n");
 #endif
 
+	uint32_t dynamic_state = 0;
+	if (info.pDynamicState)
+	{
+		for (uint32_t i = 0; i < info.pDynamicState->dynamicStateCount; i++)
+		{
+			switch (info.pDynamicState->pDynamicStates[i])
+			{
+			case VK_DYNAMIC_STATE_VIEWPORT:
+				dynamic_state |= COMMAND_BUFFER_DIRTY_VIEWPORT_BIT;
+				break;
+
+			case VK_DYNAMIC_STATE_SCISSOR:
+				dynamic_state |= COMMAND_BUFFER_DIRTY_SCISSOR_BIT;
+				break;
+
+			case VK_DYNAMIC_STATE_DEPTH_BIAS:
+				dynamic_state |= COMMAND_BUFFER_DIRTY_DEPTH_BIAS_BIT;
+				break;
+
+			case VK_DYNAMIC_STATE_STENCIL_REFERENCE:
+			case VK_DYNAMIC_STATE_STENCIL_WRITE_MASK:
+			case VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK:
+				dynamic_state |= COMMAND_BUFFER_DIRTY_STENCIL_REFERENCE_BIT;
+				break;
+
+			default:
+				break;
+			}
+		}
+	}
+
 	VkPipeline pipeline = VK_NULL_HANDLE;
 	VkResult res = table->vkCreateGraphicsPipelines(device, pipeline_cache, 1, &info, nullptr, &pipeline);
 	if (res != VK_SUCCESS)
 		LOGE("Failed to create graphics pipeline!\n");
-	return ret->add_pipeline(hash, pipeline);
+	return ret->add_pipeline(hash, { pipeline, dynamic_state }).pipeline;
 }
 
 VkPipeline Device::fossilize_create_compute_pipeline(Fossilize::Hash hash, VkComputePipelineCreateInfo &info)
@@ -162,15 +196,33 @@ VkPipeline Device::fossilize_create_compute_pipeline(Fossilize::Hash hash, VkCom
 	VkResult res = table->vkCreateComputePipelines(device, pipeline_cache, 1, &info, nullptr, &pipeline);
 	if (res != VK_SUCCESS)
 		LOGE("Failed to create compute pipeline!\n");
-	return ret->add_pipeline(hash, pipeline);
+	return ret->add_pipeline(hash, { pipeline, 0 }).pipeline;
 }
 
 bool Device::enqueue_create_graphics_pipeline(Fossilize::Hash hash,
                                               const VkGraphicsPipelineCreateInfo *create_info,
                                               VkPipeline *pipeline)
 {
+	for (uint32_t i = 0; i < create_info->stageCount; i++)
+	{
+		if (create_info->pStages[i].module == VK_NULL_HANDLE)
+		{
+			*pipeline = VK_NULL_HANDLE;
+			return true;
+		}
+	}
+
+	if (create_info->renderPass == VK_NULL_HANDLE)
+	{
+		*pipeline = VK_NULL_HANDLE;
+		return true;
+	}
+
 	if (!replayer_state.feature_filter->graphics_pipeline_is_supported(create_info))
-		return false;
+	{
+		*pipeline = VK_NULL_HANDLE;
+		return true;
+	}
 
 #ifdef GRANITE_VULKAN_MT
 	if (!replayer_state.pipeline_group && get_system_handles().thread_group)
@@ -200,8 +252,17 @@ bool Device::enqueue_create_compute_pipeline(Fossilize::Hash hash,
                                              const VkComputePipelineCreateInfo *create_info,
                                              VkPipeline *pipeline)
 {
+	if (create_info->stage.module == VK_NULL_HANDLE)
+	{
+		*pipeline = VK_NULL_HANDLE;
+		return true;
+	}
+
 	if (!replayer_state.feature_filter->compute_pipeline_is_supported(create_info))
-		return false;
+	{
+		*pipeline = VK_NULL_HANDLE;
+		return true;
+	}
 
 #ifdef GRANITE_VULKAN_MT
 	if (!replayer_state.pipeline_group && get_system_handles().thread_group)
@@ -232,7 +293,10 @@ bool Device::enqueue_create_render_pass(Fossilize::Hash hash,
                                         VkRenderPass *render_pass)
 {
 	if (!replayer_state.feature_filter->render_pass_is_supported(create_info))
-		return false;
+	{
+		*render_pass = VK_NULL_HANDLE;
+		return true;
+	}
 
 	auto *ret = render_passes.emplace_yield(hash, hash, this, *create_info);
 	*render_pass = ret->get_render_pass();

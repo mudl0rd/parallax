@@ -90,6 +90,7 @@ struct DeviceFeatures
 	VkPhysicalDevice16BitStorageFeaturesKHR storage_16bit_features = {};
 	VkPhysicalDeviceFloat16Int8FeaturesKHR float16_int8_features = {};
 	VkPhysicalDeviceFloatControlsPropertiesKHR float_control_properties = {};
+	VkPhysicalDeviceIDProperties id_properties = {};
 
 	// EXT
 	VkPhysicalDeviceExternalMemoryHostPropertiesEXT host_memory_properties = {};
@@ -135,8 +136,9 @@ struct QueueInfo
 };
 
 class Context
+	: public Util::IntrusivePtrEnabled<Context, std::default_delete<Context>, HandleCounter>
 #ifdef GRANITE_VULKAN_FOSSILIZE
-		: public Fossilize::DeviceQueryInterface
+	, public Fossilize::DeviceQueryInterface
 #endif
 {
 public:
@@ -289,4 +291,6 @@ private:
 	bool descriptor_set_layout_is_supported(const VkDescriptorSetLayoutCreateInfo *set_layout) override;
 #endif
 };
+
+using ContextHandle = Util::IntrusivePtr<Context>;
 }
