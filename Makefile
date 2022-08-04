@@ -541,8 +541,8 @@ endif
 CPUOPTS += -fcommon
 
 # set C/C++ standard to use
-CFLAGS += -std=gnu11 -D_CRT_SECURE_NO_WARNINGS -Wno-discarded-qualifiers
-CXXFLAGS += -std=gnu++17 -D_CRT_SECURE_NO_WARNINGS
+CFLAGS += -std=c11 -D_CRT_SECURE_NO_WARNINGS -Wno-discarded-qualifiers
+CXXFLAGS += -std=c++17 -D_CRT_SECURE_NO_WARNINGS
 CXXFLAGS += -fpermissive -msse4.1
 
 ifeq ($(HAVE_LTCG),1)
