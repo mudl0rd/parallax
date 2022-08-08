@@ -10,7 +10,7 @@
 #include "common.h"
 #include "gfxstructdefs.h"
 
-uint32_t rdram_size = 0x800000;
+unsigned rdram_size = 8 * 1024 * 1024;
 
 using namespace Vulkan;
 using namespace std;
@@ -200,6 +200,12 @@ void vk_blit(unsigned &width, unsigned &height)
 void vk_rasterize()
 {
 
+      if (!frontend)
+	{
+		device->next_frame_context();
+		return;
+	}
+
 	if (frontend && running)
 	{
 		frontend->set_vi_register(RDP::VIRegister::Control, *GET_GFX_INFO(VI_STATUS_REG));
@@ -222,8 +228,6 @@ void vk_rasterize()
 		quirks.set_native_resolution_tex_rect(vk_native_tex_rect);
 		frontend->set_quirks(quirks);
 
-		frontend->begin_frame_context();
-
 		unsigned width = 0;
 		unsigned height = 0;
 
@@ -234,6 +238,7 @@ void vk_rasterize()
 			return;
 		}
 		screen_swap(false);
+		frontend->begin_frame_context();
 	}
 }
 
@@ -332,45 +337,26 @@ bool vk_init()
 	running = false;
 	context.reset(new Context);
 	device.reset(new Device);
-	frontend.reset();
-
 	if (!::Vulkan::Context::init_loader(nullptr))
 		return false;
 	if (!context->init_instance_and_device(nullptr, 0, nullptr, 0, ::Vulkan::CONTEXT_CREATION_DISABLE_BINDLESS_BIT))
 		return false;
 
 	uintptr_t aligned_rdram = reinterpret_cast<uintptr_t>(gfx_info.RDRAM);
-	uintptr_t offset = 0;
-
-	if (device->get_device_features().supports_external_memory_host)
-	{
-		size_t align = device->get_device_features().host_memory_properties.minImportedHostPointerAlignment;
-		offset = aligned_rdram & (align - 1);
-
-		if (offset)
-		{
-			return false;
-		}
-		aligned_rdram -= offset;
-	}
-
 	device->set_context(*context);
 	device->init_frame_contexts(3);
 	::RDP::CommandProcessorFlags flags = 0;
-
 	frontend.reset(new RDP::CommandProcessor(*device, reinterpret_cast<void *>(aligned_rdram),
-											 offset, rdram_size, rdram_size / 2, flags));
+											 0, rdram_size, rdram_size / 2, flags));
 	if (!frontend->device_is_supported())
 	{
 		frontend.reset();
 		return false;
 	}
-
 	RDP::Quirks quirks;
 	quirks.set_native_texture_lod(vk_native_texture_lod);
 	quirks.set_native_resolution_tex_rect(vk_native_tex_rect);
 	frontend->set_quirks(quirks);
-
 	running = true;
 	vk_initialized = 1;
 	return true;
