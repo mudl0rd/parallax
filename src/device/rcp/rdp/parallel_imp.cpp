@@ -200,7 +200,7 @@ void vk_blit(unsigned &width, unsigned &height)
 void vk_rasterize()
 {
 
-      if (!frontend)
+    if (!frontend)
 	{
 		device->next_frame_context();
 		return;
@@ -227,16 +227,12 @@ void vk_rasterize()
 		quirks.set_native_texture_lod(vk_native_texture_lod);
 		quirks.set_native_resolution_tex_rect(vk_native_tex_rect);
 		frontend->set_quirks(quirks);
-
 		unsigned width = 0;
 		unsigned height = 0;
-
 		vk_blit(width, height);
 		if (width == 0 || height == 0)
-		{
-			screen_swap(true);
-			return;
-		}
+		screen_swap(true);
+		else
 		screen_swap(false);
 		frontend->begin_frame_context();
 	}
@@ -337,17 +333,14 @@ bool vk_init()
 	running = false;
 	context.reset(new Context);
 	device.reset(new Device);
+
 	if (!::Vulkan::Context::init_loader(nullptr))
 		return false;
-	if (!context->init_instance_and_device(nullptr, 0, nullptr, 0, ::Vulkan::CONTEXT_CREATION_DISABLE_BINDLESS_BIT))
+	if (!context->init_instance_and_device(nullptr, 0, nullptr, 0))
 		return false;
-
-	uintptr_t aligned_rdram = reinterpret_cast<uintptr_t>(gfx_info.RDRAM);
 	device->set_context(*context);
-	device->init_frame_contexts(3);
-	::RDP::CommandProcessorFlags flags = 0;
-	frontend.reset(new RDP::CommandProcessor(*device, reinterpret_cast<void *>(aligned_rdram),
-											 0, rdram_size, rdram_size / 2, flags));
+	frontend.reset(new RDP::CommandProcessor(*device, reinterpret_cast<void *>(gfx_info.RDRAM),
+											 0, rdram_size, rdram_size / 2, 0));
 	if (!frontend->device_is_supported())
 	{
 		frontend.reset();
