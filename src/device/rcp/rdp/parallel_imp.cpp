@@ -10,7 +10,7 @@
 #include "common.h"
 #include "gfxstructdefs.h"
 
-uint32_t rdram_size = 0x800000;
+unsigned rdram_size = 8 * 1024 * 1024;
 
 using namespace Vulkan;
 using namespace std;
@@ -40,9 +40,7 @@ bool vk_interlacing;
 bool skip_swap_clear;
 static bool vk_initialized;
 
-#ifdef _WIN32
-#include <intrin.h>
-#endif
+#include <immintrin.h>
 
 inline unsigned long rotatel(unsigned long X, int C)
 {
@@ -127,8 +125,8 @@ void rgba2bgra(const void *source, void *dest, unsigned int width, unsigned int 
 	for (y = 0; y < height; y++)
 	{
 		// Start of buffer
-		auto src = static_cast<const unsigned __int32 *>(source); // unsigned int = 4 bytes
-		auto dst = static_cast<unsigned __int32 *>(dest);
+		auto src = static_cast<const unsigned int32_t *>(source); // unsigned int = 4 bytes
+		auto dst = static_cast<unsigned int32_t *>(dest);
 		// Cast first to avoid warning C26451: Arithmetic overflow
 		unsigned long YxW = (unsigned long)(y * width);
 		src += YxW;
@@ -193,7 +191,7 @@ void vk_blit(unsigned &width, unsigned &height)
 		retro_pitch = height * sizeof(uint32_t);
 
 		scanout.fence->wait();
-		uint8_t *ptr = device->map_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
+		uint8_t *ptr = (uint8_t*)device->map_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
 		rgba2bgra(ptr, prescale, retro_width, retro_height);
 		device->unmap_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
 	}
@@ -201,6 +199,12 @@ void vk_blit(unsigned &width, unsigned &height)
 
 void vk_rasterize()
 {
+
+    if (!frontend)
+	{
+		device->next_frame_context();
+		return;
+	}
 
 	if (frontend && running)
 	{
@@ -223,19 +227,14 @@ void vk_rasterize()
 		quirks.set_native_texture_lod(vk_native_texture_lod);
 		quirks.set_native_resolution_tex_rect(vk_native_tex_rect);
 		frontend->set_quirks(quirks);
-
-		frontend->begin_frame_context();
-
 		unsigned width = 0;
 		unsigned height = 0;
-
 		vk_blit(width, height);
 		if (width == 0 || height == 0)
-		{
-			screen_swap(true);
-			return;
-		}
+		screen_swap(true);
+		else
 		screen_swap(false);
+		frontend->begin_frame_context();
 	}
 }
 
@@ -334,45 +333,23 @@ bool vk_init()
 	running = false;
 	context.reset(new Context);
 	device.reset(new Device);
-	frontend.reset();
 
 	if (!::Vulkan::Context::init_loader(nullptr))
 		return false;
-	if (!context->init_instance_and_device(nullptr, 0, nullptr, 0, ::Vulkan::CONTEXT_CREATION_DISABLE_BINDLESS_BIT))
+	if (!context->init_instance_and_device(nullptr, 0, nullptr, 0))
 		return false;
-
-	uintptr_t aligned_rdram = reinterpret_cast<uintptr_t>(gfx_info.RDRAM);
-	uintptr_t offset = 0;
-
-	if (device->get_device_features().supports_external_memory_host)
-	{
-		size_t align = device->get_device_features().host_memory_properties.minImportedHostPointerAlignment;
-		offset = aligned_rdram & (align - 1);
-
-		if (offset)
-		{
-			return false;
-		}
-		aligned_rdram -= offset;
-	}
-
 	device->set_context(*context);
-	device->init_frame_contexts(3);
-	::RDP::CommandProcessorFlags flags = 0;
-
-	frontend.reset(new RDP::CommandProcessor(*device, reinterpret_cast<void *>(aligned_rdram),
-											 offset, rdram_size, rdram_size / 2, flags));
+	frontend.reset(new RDP::CommandProcessor(*device, reinterpret_cast<void *>(gfx_info.RDRAM),
+											 0, rdram_size, rdram_size / 2, 0));
 	if (!frontend->device_is_supported())
 	{
 		frontend.reset();
 		return false;
 	}
-
 	RDP::Quirks quirks;
 	quirks.set_native_texture_lod(vk_native_texture_lod);
 	quirks.set_native_resolution_tex_rect(vk_native_tex_rect);
 	frontend->set_quirks(quirks);
-
 	running = true;
 	vk_initialized = 1;
 	return true;

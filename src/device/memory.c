@@ -41,6 +41,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #if defined(_WIN32) || defined(HAVE_LIBNX)
 #include <malloc.h>
@@ -231,90 +232,34 @@ enum {
     MB_MAX_SIZE_FULL = 0x20000000
 };
 
-/* Use LSB of mem_base pointer to encode mem_base mode
- * 1: compressed, 0: full
- */
-#define MEM_BASE_MODE(mem_base) ((uintptr_t)(mem_base) & 0x1)
-#define MEM_BASE_PTR(mem_base)  ((void*)((uintptr_t)(mem_base) & ~0x1))
-#define SET_MEM_BASE_MODE(mem_base) (mem_base = (void*)((uintptr_t)(mem_base) | 0x1))
+void *mem_alloc(size_t boundary, size_t size)
+{
+    void **place;
+    uintptr_t addr = 0;
+    void *ptr = malloc(boundary + size + sizeof(uintptr_t));
+    addr = ((uintptr_t)ptr + sizeof(uintptr_t) + boundary) & ~(boundary - 1);
+    place = (void **) addr;
+    place[-1] = ptr;
+
+    return (void *) addr;
+}
 
 void* init_mem_base(void)
-{
+{ 
     void* mem_base;
-
-    /* First try the full mem base alloc */
-#ifdef _WIN32
-    mem_base = _aligned_malloc(MB_MAX_SIZE_FULL, MB_RDRAM_DRAM_ALIGNMENT_REQUIREMENT);
-#else
-#ifdef HAVE_LIBNX
-    if (!(mem_base = memalign(MB_RDRAM_DRAM_ALIGNMENT_REQUIREMENT, MB_MAX_SIZE_FULL)))
-        mem_base = NULL;
-#else
-    if (posix_memalign(&mem_base, MB_RDRAM_DRAM_ALIGNMENT_REQUIREMENT, MB_MAX_SIZE_FULL) != 0)
-        mem_base = NULL;
-#endif // HAVE_LIBNX
-#endif
-    if (mem_base == NULL) {
-        /* if it failed, try the compressed mem base alloc */
-        mem_base = malloc(MB_MAX_SIZE);
-        if (mem_base != NULL) {
-            /* Compressed mem base mode has LSB = 1 */
-            assert(MEM_BASE_MODE(mem_base) == 0);
-            SET_MEM_BASE_MODE(mem_base);
-            DebugMessage(M64MSG_INFO, "Using compressed mem base");
-        }
-    }
-    else {
-        /* Full mem base mode has LSB = 0 */
-        assert(MEM_BASE_MODE(mem_base) == 0);
-        DebugMessage(M64MSG_INFO, "Using full mem base");
-    }
-
+    mem_base = mem_alloc(MB_RDRAM_DRAM_ALIGNMENT_REQUIREMENT, MB_MAX_SIZE_FULL);
+    DebugMessage(M64MSG_INFO, "Using full mem base");
     return mem_base;
 }
 
 void release_mem_base(void* mem_base)
 {
-#ifdef _WIN32
-    if (MEM_BASE_MODE(mem_base) == 0)
-        _aligned_free(MEM_BASE_PTR(mem_base));
-    else
-#endif
-        free(MEM_BASE_PTR(mem_base));
+    free(mem_base);
 }
 
 uint32_t* mem_base_u32(void* mem_base, uint32_t address)
 {
     uint32_t* mem;
-
-    if (MEM_BASE_MODE(mem_base) == 0) {
-        /* In full mem base mode, use simple pointer arithmetic */
-        mem = (uint32_t*)((uint8_t*)mem_base + address);
-    }
-    else {
-        /* In compressed mem base mode, select appropriate mem_base offset */
-        mem_base = MEM_BASE_PTR(mem_base);
-
-        if (address < RDRAM_MAX_SIZE) {
-            mem = (uint32_t*)((uint8_t*)mem_base + (address - MM_RDRAM_DRAM + MB_RDRAM_DRAM));
-        }
-        else if (address >= MM_CART_ROM) {
-            if ((address & UINT32_C(0xfff00000)) == MM_PIF_MEM) {
-                mem = (uint32_t*)((uint8_t*)mem_base + (address - MM_PIF_MEM + MB_PIF_MEM));
-            } else {
-                mem = (uint32_t*)((uint8_t*)mem_base + (address - MM_CART_ROM + MB_CART_ROM));
-            }
-        }
-        else if ((address & UINT32_C(0xfe000000)) ==  MM_DD_ROM) {
-            mem = (uint32_t*)((uint8_t*)mem_base + (address - MM_DD_ROM + MB_DD_ROM));
-        }
-        else if ((address & UINT32_C(0xffffe000)) == MM_RSP_MEM) {
-            mem = (uint32_t*)((uint8_t*)mem_base + (address - MM_RSP_MEM + MB_RSP_MEM));
-        }
-        else {
-            mem = NULL;
-        }
-    }
-
+    mem = (uint32_t*)((uint8_t*)mem_base + address);
     return mem;
 }
