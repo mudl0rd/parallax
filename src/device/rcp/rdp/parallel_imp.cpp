@@ -9,6 +9,7 @@
 #include "Gfx #1.3.h"
 #include "common.h"
 #include "gfxstructdefs.h"
+#include "glad.h"
 
 unsigned rdram_size = 8 * 1024 * 1024;
 
@@ -114,41 +115,78 @@ static const unsigned cmd_len_lut[64] = {
 	1,
 };
 
-void rgba2bgra(const void *source, void *dest, unsigned int width, unsigned int height)
-{
-	uint32_t *src = nullptr;
-	uint32_t *dst = nullptr;
-	unsigned int x = 0;
-	unsigned int y = 0;
-	static const __m128i m = _mm_set_epi8(15, 12, 13, 14, 11, 8, 9, 10, 7, 4, 5, 6, 3, 0, 1, 2);
+GLuint tex_id = 0;
 
-	for (y = 0; y < height; y++)
-	{
-		// Start of buffer
-		auto src = static_cast<const unsigned int32_t *>(source); // unsigned int = 4 bytes
-		auto dst = static_cast<unsigned int32_t *>(dest);
-		// Cast first to avoid warning C26451: Arithmetic overflow
-		unsigned long YxW = (unsigned long)(y * width);
-		src += YxW;
-		dst += YxW;
-		unsigned int x;
-		for (x = 0; ((reinterpret_cast<intptr_t>(&dst[x]) & 15) != 0) && x < width; x++)
-		{
-			auto rgbapix = src[x];
-			dst[x] = (rotatel(rgbapix, 16) & 0x00ff00ff) | (rgbapix & 0xff00ff00);
-		}
-		for (; x + 3 < width; x += 4)
-		{
-			__m128i sourceData = _mm_loadu_si128(reinterpret_cast<const __m128i *>(&src[x]));
-			__m128i bgra = _mm_shuffle_epi8(sourceData, m);
-			_mm_store_si128(reinterpret_cast<__m128i *>(&dst[x]), bgra);
-		}
-		for (; x < width; x++)
-		{
-			auto rgbapix = src[x];
-			dst[x] = (rotatel(rgbapix, 16) & 0x00ff00ff) | (rgbapix & 0xff00ff00);
-		}
-	}
+struct shader_id
+{
+	int fsid;
+	int vsid;
+	unsigned int pid;
+};
+
+static GLuint vao = 0;
+shader_id program = {0};
+#include <libretro.h>
+extern struct retro_hw_render_callback hw_render;
+#define SHADER_HEADER "#version 330 core\n"
+const GLchar *vert_shader =
+	SHADER_HEADER
+	"out vec2 uv;\n"
+	"void main(void) {\n"
+	"    uv = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);\n"
+	"    gl_Position = vec4(uv * vec2(2.0, -2.0) + vec2(-1.0, 1.0), 0.0, 1.0);\n"
+	"}\n";
+const GLchar *frag_shader =
+	SHADER_HEADER
+	"in vec2 uv;\n"
+	"layout(location = 0) out vec4 color;\n"
+	"uniform sampler2D tex0;\n"
+	"void main(void) {\n"
+	"color = texture(tex0, uv).bgra;\n"
+	"}\n";
+
+shader_id initShader(const char *vsh, const char *fsh)
+{
+	shader_id shad = {0};
+	shad.vsid = glCreateShaderProgramv(GL_VERTEX_SHADER, 1, &vsh);
+	shad.fsid = glCreateShaderProgramv(GL_FRAGMENT_SHADER, 1, &fsh);
+	glGenProgramPipelines(1, &shad.pid);
+	glBindProgramPipeline(shad.pid);
+	glUseProgramStages(shad.pid, GL_VERTEX_SHADER_BIT, shad.vsid);
+	glUseProgramStages(shad.pid, GL_FRAGMENT_SHADER_BIT, shad.fsid);
+	glBindProgramPipeline(0);
+	return shad;
+}
+
+void init_framebuffer(int width, int height)
+{
+	if (program.pid)
+		glDeleteProgramPipelines(1, &program.pid);
+	if (tex_id)
+		glDeleteTextures(1, &tex_id);
+	program = initShader(vert_shader, frag_shader);
+	glBindProgramPipeline(program.pid);
+	glGenVertexArrays(1, &vao);
+
+	glGenTextures(1, &tex_id);
+	glBindTexture(GL_TEXTURE_2D, tex_id);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0,
+				 GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, NULL);
+}
+
+static inline unsigned get_alignment(unsigned pitch)
+{
+	if (pitch & 1)
+		return 1;
+	if (pitch & 2)
+		return 2;
+	if (pitch & 4)
+		return 4;
+	return 8;
 }
 
 void vk_blit(unsigned &width, unsigned &height)
@@ -188,19 +226,35 @@ void vk_blit(unsigned &width, unsigned &height)
 		height = scanout.height;
 		retro_width = width;
 		retro_height = height;
-		retro_pitch = height * sizeof(uint32_t);
+		retro_pitch = width * sizeof(uint32_t);
 
 		scanout.fence->wait();
-		uint8_t *ptr = (uint8_t*)device->map_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
-		rgba2bgra(ptr, prescale, retro_width, retro_height);
+		uint8_t *ptr = (uint8_t *)device->map_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
+		glBindTexture(GL_TEXTURE_2D, tex_id);
+		glPixelStorei(GL_UNPACK_ALIGNMENT, get_alignment(retro_pitch));
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, retro_pitch / sizeof(uint32_t));
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, retro_width, retro_height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, ptr);
 		device->unmap_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hw_render.get_current_framebuffer());
+		glBindProgramPipeline(program.pid);
+		glBindTexture(GL_TEXTURE_2D, tex_id);
+		glClearColor(0.0, 0.0, 0.0, 1.0);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glBindVertexArray(vao);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+		glBindVertexArray(0);
+		glBindProgramPipeline(0);
+		glBindFramebuffer(GL_FRAMEBUFFER, hw_render.get_current_framebuffer());
 	}
 }
 
 void vk_rasterize()
 {
 
-    if (!frontend)
+	if (!frontend)
 	{
 		device->next_frame_context();
 		return;
@@ -231,9 +285,9 @@ void vk_rasterize()
 		unsigned height = 0;
 		vk_blit(width, height);
 		if (width == 0 || height == 0)
-		screen_swap(true);
+			screen_swap(true);
 		else
-		screen_swap(false);
+			screen_swap(false);
 		frontend->begin_frame_context();
 	}
 }
@@ -326,6 +380,10 @@ void vk_destroy()
 	frontend.reset();
 	device.reset();
 	context.reset();
+	if (program.pid)
+		glDeleteProgramPipelines(1, &program.pid);
+	if (tex_id)
+		glDeleteTextures(1, &tex_id);
 }
 
 bool vk_init()
@@ -352,6 +410,7 @@ bool vk_init()
 	frontend->set_quirks(quirks);
 	running = true;
 	vk_initialized = 1;
+	init_framebuffer(640, 480);
 	return true;
 }
 

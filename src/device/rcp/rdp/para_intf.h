@@ -12,7 +12,9 @@ extern "C"
     void vk_process_commands(void);
     bool vk_init(void);
     void vk_destroy(void);
+    void video_render(void);
     void screen_swap(bool blank);
+    void init_framebuffer(int width, int height);
     int retro_width;
     int retro_height;
     int retro_pitch;

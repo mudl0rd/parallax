@@ -96,13 +96,13 @@ SOURCES_C += \
 	$(ROOT_DIR)/deps/md5.c
 COREFLAGS += -I$(ROOT_DIR)/deps/md5
 
+SOURCES_C += $(ROOT_DIR)/deps/glad.c
 
 ifneq (,$(findstring win,$(platform)))
 	SOURCES_C += $(ROOT_DIR)/custom/osal/osal_files_win32.c
 else
 	SOURCES_C += $(ROOT_DIR)/custom/osal/osal_files_unix.c
 endif
-
 
 # Libretro
 SOURCES_C += $(ROOT_DIR)/src/libretro.c \
