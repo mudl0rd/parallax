@@ -378,6 +378,8 @@ bool vk_init()
 		return false;
 	}
 	RDP::Quirks quirks;
+	quirks.set_native_texture_lod(true);
+	quirks.set_native_resolution_tex_rect(true);
 	frontend->set_quirks(quirks);
 	running = true;
 	vk_initialized = 1;
