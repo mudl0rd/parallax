@@ -10,6 +10,9 @@
 #include "common.h"
 #include "gfxstructdefs.h"
 #include "glad.h"
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 unsigned rdram_size = 8 * 1024 * 1024;
 
@@ -29,14 +32,6 @@ bool vk_ssreadbacks;
 bool vk_ssdither;
 bool running = false;
 unsigned width, height;
-unsigned vk_overscan;
-unsigned vk_vertical_stretch;
-unsigned vk_downscaling_steps;
-bool vk_native_texture_lod;
-bool vk_native_tex_rect;
-bool vk_synchronous, vk_divot_filter, vk_gamma_dither;
-bool vk_vi_aa, vk_vi_scale, vk_dither_filter;
-bool vk_interlacing;
 
 bool skip_swap_clear;
 static bool vk_initialized;
@@ -142,7 +137,7 @@ const GLchar *frag_shader =
 	"layout(location = 0) out vec4 color;\n"
 	"uniform sampler2D tex0;\n"
 	"void main(void) {\n"
-	"color = texture(tex0, uv).bgra;\n"
+	"color = texture(tex0, uv);\n"
 	"}\n";
 
 shader_id initShader(const char *vsh, const char *fsh)
@@ -170,12 +165,8 @@ void init_framebuffer(int width, int height)
 
 	glGenTextures(1, &tex_id);
 	glBindTexture(GL_TEXTURE_2D, tex_id);
-
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0,
-				 GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, NULL);
 }
 
 static inline unsigned get_alignment(unsigned pitch)
@@ -196,21 +187,9 @@ void vk_blit(unsigned &width, unsigned &height)
 
 		RDP::ScanoutOptions opts = {};
 		opts.persist_frame_on_invalid_input = true;
-		opts.vi.aa = vk_vi_aa;
-		opts.vi.scale = vk_vi_scale;
-		opts.vi.dither_filter = vk_dither_filter;
-		opts.vi.divot_filter = vk_divot_filter;
-		opts.vi.gamma_dither = vk_gamma_dither;
-		opts.blend_previous_frame = vk_interlacing;
-		opts.upscale_deinterlacing = !vk_interlacing;
-		opts.downscale_steps = vk_downscaling_steps;
-		opts.crop_overscan_pixels = vk_overscan;
-		if (vk_vertical_stretch)
-		{
-			opts.crop_rect.top = vk_vertical_stretch;
-			opts.crop_rect.bottom = vk_vertical_stretch;
-			opts.crop_rect.enable = true;
-		}
+		opts.crop_rect.top = true;
+		opts.crop_rect.bottom = true;
+		opts.crop_rect.enable = true;
 
 		RDP::VIScanoutBuffer scanout;
 		frontend->scanout_async_buffer(scanout, opts);
@@ -221,7 +200,6 @@ void vk_blit(unsigned &width, unsigned &height)
 			height = 0;
 			return;
 		}
-
 		width = scanout.width;
 		height = scanout.height;
 		retro_width = width;
@@ -233,11 +211,9 @@ void vk_blit(unsigned &width, unsigned &height)
 		glBindTexture(GL_TEXTURE_2D, tex_id);
 		glPixelStorei(GL_UNPACK_ALIGNMENT, get_alignment(retro_pitch));
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, retro_pitch / sizeof(uint32_t));
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, retro_width, retro_height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, ptr);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, retro_width, retro_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, ptr);
 		device->unmap_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-
-		glBindTexture(GL_TEXTURE_2D, 0);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hw_render.get_current_framebuffer());
 		glBindProgramPipeline(program.pid);
 		glBindTexture(GL_TEXTURE_2D, tex_id);
@@ -247,6 +223,7 @@ void vk_blit(unsigned &width, unsigned &height)
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 		glBindVertexArray(0);
 		glBindProgramPipeline(0);
+		glBindTexture(GL_TEXTURE_2D, 0);
 		glBindFramebuffer(GL_FRAMEBUFFER, hw_render.get_current_framebuffer());
 	}
 }
@@ -278,8 +255,6 @@ void vk_rasterize()
 		frontend->set_vi_register(RDP::VIRegister::YScale, *GET_GFX_INFO(VI_Y_SCALE_REG));
 
 		RDP::Quirks quirks;
-		quirks.set_native_texture_lod(vk_native_texture_lod);
-		quirks.set_native_resolution_tex_rect(vk_native_tex_rect);
 		frontend->set_quirks(quirks);
 		unsigned width = 0;
 		unsigned height = 0;
@@ -357,8 +332,6 @@ void vk_process_commands()
 			if (RDP::Op(command) == RDP::Op::SyncFull)
 			{
 				// For synchronous RDP:
-				if (vk_synchronous && frontend)
-					frontend->wait_for_timeline(frontend->signal_timeline());
 				*gfx_info.MI_INTR_REG |= DP_INTERRUPT;
 				gfx_info.CheckInterrupts();
 			}
@@ -405,8 +378,6 @@ bool vk_init()
 		return false;
 	}
 	RDP::Quirks quirks;
-	quirks.set_native_texture_lod(vk_native_texture_lod);
-	quirks.set_native_resolution_tex_rect(vk_native_tex_rect);
 	frontend->set_quirks(quirks);
 	running = true;
 	vk_initialized = 1;
