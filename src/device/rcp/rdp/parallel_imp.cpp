@@ -128,8 +128,8 @@ const GLchar *vert_shader =
 	SHADER_HEADER
 	"out vec2 uv;\n"
 	"void main(void) {\n"
-	"    uv = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);\n"
-	"    gl_Position = vec4(uv * vec2(2.0, -2.0) + vec2(-1.0, 1.0), 0.0, 1.0);\n"
+	"uv = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);\n"
+	"gl_Position = vec4(uv * vec2(2.0, -2.0) + vec2(-1.0, 1.0), 0.0, 1.0);\n"
 	"}\n";
 const GLchar *frag_shader =
 	SHADER_HEADER
@@ -163,10 +163,9 @@ void init_framebuffer(int width, int height)
 	glBindProgramPipeline(program.pid);
 	glGenVertexArrays(1, &vao);
 
-	glGenTextures(1, &tex_id);
-	glBindTexture(GL_TEXTURE_2D, tex_id);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glCreateTextures(GL_TEXTURE_2D, 1, &tex_id);
+	glTextureParameteri(tex_id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTextureParameteri(tex_id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 }
 
 static inline unsigned get_alignment(unsigned pitch)
@@ -208,22 +207,21 @@ void vk_blit(unsigned &width, unsigned &height)
 
 		scanout.fence->wait();
 		uint8_t *ptr = (uint8_t *)device->map_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
-		glBindTexture(GL_TEXTURE_2D, tex_id);
 		glPixelStorei(GL_UNPACK_ALIGNMENT, get_alignment(retro_pitch));
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, retro_pitch / sizeof(uint32_t));
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, retro_width, retro_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, ptr);
+		glTextureStorage2D(tex_id, 1, GL_RGBA8, retro_width, retro_height);
+		glTextureSubImage2D(tex_id, 0, 0, 0, retro_width, retro_height, GL_RGBA, GL_UNSIGNED_BYTE, ptr);
 		device->unmap_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hw_render.get_current_framebuffer());
 		glBindProgramPipeline(program.pid);
-		glBindTexture(GL_TEXTURE_2D, tex_id);
+		glBindTextureUnit(0, tex_id);
 		glClearColor(0.0, 0.0, 0.0, 1.0);
 		glClear(GL_COLOR_BUFFER_BIT);
 		glBindVertexArray(vao);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 		glBindVertexArray(0);
 		glBindProgramPipeline(0);
-		glBindTexture(GL_TEXTURE_2D, 0);
 		glBindFramebuffer(GL_FRAMEBUFFER, hw_render.get_current_framebuffer());
 	}
 }
@@ -378,8 +376,6 @@ bool vk_init()
 		return false;
 	}
 	RDP::Quirks quirks;
-	quirks.set_native_texture_lod(true);
-	quirks.set_native_resolution_tex_rect(true);
 	frontend->set_quirks(quirks);
 	running = true;
 	vk_initialized = 1;
