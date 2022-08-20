@@ -110,17 +110,23 @@ static const unsigned cmd_len_lut[64] = {
 	1,
 };
 
-GLuint tex_id = 0;
-
 struct shader_id
 {
 	int fsid;
 	int vsid;
 	unsigned int pid;
 };
-
+#define TEX_NUM 3
 static GLuint vao = 0;
+static GLuint buffer_pbo;
 shader_id program = {0};
+static GLuint texture[TEX_NUM];
+static uint8_t *buffer_data;
+static uint32_t buffer_size = (640 * 8) * (480 * 8) * sizeof(uint32_t);
+int32_t tex_width[TEX_NUM];
+int32_t tex_height[TEX_NUM];
+static int rotate_buffer;
+
 #include <libretro.h>
 extern struct retro_hw_render_callback hw_render;
 #define SHADER_HEADER "#version 330 core\n"
@@ -157,15 +163,20 @@ void init_framebuffer(int width, int height)
 {
 	if (program.pid)
 		glDeleteProgramPipelines(1, &program.pid);
-	if (tex_id)
-		glDeleteTextures(1, &tex_id);
 	program = initShader(vert_shader, frag_shader);
 	glBindProgramPipeline(program.pid);
 	glGenVertexArrays(1, &vao);
-
-	glCreateTextures(GL_TEXTURE_2D, 1, &tex_id);
-	glTextureParameteri(tex_id, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTextureParameteri(tex_id, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glGenTextures(TEX_NUM, &texture[0]);
+	for (int i = 0; i < TEX_NUM; ++i)
+	{
+		glBindTexture(GL_TEXTURE_2D, texture[i]);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	}
+	glGenBuffers(1, &buffer_pbo);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, buffer_pbo);
+	glBufferStorage(GL_PIXEL_UNPACK_BUFFER, buffer_size * TEX_NUM, 0, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
+	buffer_data = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, buffer_size * TEX_NUM, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
 }
 
 static inline unsigned get_alignment(unsigned pitch)
@@ -179,6 +190,47 @@ static inline unsigned get_alignment(unsigned pitch)
 	return 8;
 }
 
+uint8_t *screen_get_texture_data()
+{
+	return buffer_data + (rotate_buffer * buffer_size);
+}
+
+void screen_write(int width, int height)
+{
+	bool buffer_size_changed = tex_width[rotate_buffer] != width || tex_height[rotate_buffer] != height;
+	char *offset = (char *)(rotate_buffer * buffer_size);
+	glBindTexture(GL_TEXTURE_2D, texture[rotate_buffer]);
+	// check if the framebuffer size has changed
+	if (buffer_size_changed)
+	{
+		int retro_pitch = width * sizeof(uint32_t);
+		tex_width[rotate_buffer] = width;
+		tex_height[rotate_buffer] = height;
+		// set pitch for all unpacking operations
+		glPixelStorei(GL_UNPACK_ALIGNMENT, get_alignment(retro_pitch));
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, retro_pitch);
+		// reallocate texture buffer on GPU
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, tex_width[rotate_buffer],
+					 tex_height[rotate_buffer], 0, GL_RGBA, GL_UNSIGNED_BYTE, offset);
+	}
+	else
+	{
+		// copy local buffer to GPU texture buffer
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, tex_width[rotate_buffer], tex_height[rotate_buffer],
+						GL_RGBA, GL_UNSIGNED_BYTE, offset);
+	}
+	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+	glBindProgramPipeline(program.pid);
+	glActiveTexture(GL_TEXTURE0);
+	glClearColor(0.0, 0.0, 0.0, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT);
+	glBindVertexArray(vao);
+	glDrawArrays(GL_TRIANGLES, 0, 3);
+	glBindVertexArray(0);
+	glBindProgramPipeline(0);
+	rotate_buffer = (rotate_buffer + 1) % TEX_NUM;
+}
+
 void vk_blit(unsigned &width, unsigned &height)
 {
 	if (running)
@@ -189,6 +241,8 @@ void vk_blit(unsigned &width, unsigned &height)
 		opts.crop_rect.top = true;
 		opts.crop_rect.bottom = true;
 		opts.crop_rect.enable = true;
+		opts.vi.aa = true;
+		opts.downscale_steps = 2;
 
 		RDP::VIScanoutBuffer scanout;
 		frontend->scanout_async_buffer(scanout, opts);
@@ -206,23 +260,12 @@ void vk_blit(unsigned &width, unsigned &height)
 		retro_pitch = width * sizeof(uint32_t);
 
 		scanout.fence->wait();
-		uint8_t *ptr = (uint8_t *)device->map_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
-		glPixelStorei(GL_UNPACK_ALIGNMENT, get_alignment(retro_pitch));
-		glPixelStorei(GL_UNPACK_ROW_LENGTH, retro_pitch / sizeof(uint32_t));
-		glTextureStorage2D(tex_id, 1, GL_RGBA8, retro_width, retro_height);
-		glTextureSubImage2D(tex_id, 0, 0, 0, retro_width, retro_height, GL_RGBA, GL_UNSIGNED_BYTE, ptr);
+		uint8_t *color_data = screen_get_texture_data();
+		memcpy(color_data, device->map_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT),
+			   width * height * sizeof(uint32_t));
 		device->unmap_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
-		glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hw_render.get_current_framebuffer());
-		glBindProgramPipeline(program.pid);
-		glBindTextureUnit(0, tex_id);
-		glClearColor(0.0, 0.0, 0.0, 1.0);
-		glClear(GL_COLOR_BUFFER_BIT);
-		glBindVertexArray(vao);
-		glDrawArrays(GL_TRIANGLES, 0, 3);
-		glBindVertexArray(0);
-		glBindProgramPipeline(0);
-		glBindFramebuffer(GL_FRAMEBUFFER, hw_render.get_current_framebuffer());
+
+		screen_write(retro_width, retro_height);
 	}
 }
 
@@ -253,7 +296,10 @@ void vk_rasterize()
 		frontend->set_vi_register(RDP::VIRegister::YScale, *GET_GFX_INFO(VI_Y_SCALE_REG));
 
 		RDP::Quirks quirks;
+		quirks.set_native_texture_lod(true);
+		quirks.set_native_resolution_tex_rect(true);
 		frontend->set_quirks(quirks);
+		frontend->begin_frame_context();
 		unsigned width = 0;
 		unsigned height = 0;
 		vk_blit(width, height);
@@ -261,7 +307,6 @@ void vk_rasterize()
 			screen_swap(true);
 		else
 			screen_swap(false);
-		frontend->begin_frame_context();
 	}
 }
 
@@ -353,8 +398,10 @@ void vk_destroy()
 	context.reset();
 	if (program.pid)
 		glDeleteProgramPipelines(1, &program.pid);
-	if (tex_id)
-		glDeleteTextures(1, &tex_id);
+	glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
+	glDeleteTextures(TEX_NUM, &texture[0]);
+	glDeleteVertexArrays(1, &vao);
+	glDeleteBuffers(1, &buffer_pbo);
 }
 
 bool vk_init()
@@ -368,6 +415,7 @@ bool vk_init()
 	if (!context->init_instance_and_device(nullptr, 0, nullptr, 0))
 		return false;
 	device->set_context(*context);
+
 	frontend.reset(new RDP::CommandProcessor(*device, reinterpret_cast<void *>(gfx_info.RDRAM),
 											 0, rdram_size, rdram_size / 2, 0));
 	if (!frontend->device_is_supported())
@@ -375,10 +423,12 @@ bool vk_init()
 		frontend.reset();
 		return false;
 	}
-	RDP::Quirks quirks;
-	frontend->set_quirks(quirks);
 	running = true;
 	vk_initialized = 1;
+	RDP::Quirks quirks;
+	quirks.set_native_texture_lod(true);
+	quirks.set_native_resolution_tex_rect(true);
+	frontend->set_quirks(quirks);
 	init_framebuffer(640, 480);
 	return true;
 }
