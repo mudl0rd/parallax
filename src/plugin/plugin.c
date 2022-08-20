@@ -46,51 +46,49 @@
 #include <stdio.h>
 
 CONTROL Controls[4];
-void ResizeVideoOutput(int width, int height){
-
+void ResizeVideoOutput(int width, int height)
+{
 }
 /* local data structures and functions */
-#define DEFINE_GFX(X) \
+#define DEFINE_GFX(X)                                                                                   \
     EXPORT m64p_error CALL X##PluginGetVersion(m64p_plugin_type *, int *, int *, const char **, int *); \
-    EXPORT void CALL X##ChangeWindow(void); \
-    EXPORT int  CALL X##InitiateGFX(GFX_INFO Gfx_Info); \
-    EXPORT void CALL X##MoveScreen(int x, int y); \
-    EXPORT void CALL X##ProcessDList(void); \
-    EXPORT void CALL X##ProcessRDPList(void); \
-    EXPORT void CALL X##RomClosed(void); \
-    EXPORT int  CALL X##RomOpen(void); \
-    EXPORT void CALL X##ShowCFB(void); \
-    EXPORT void CALL X##UpdateScreen(void); \
-    EXPORT void CALL X##ViStatusChanged(void); \
-    EXPORT void CALL X##ViWidthChanged(void); \
-    EXPORT void CALL X##ReadScreen2(void *dest, int *width, int *height, int front); \
-    EXPORT void CALL X##SetRenderingCallback(void (*callback)(int)); \
-    EXPORT void CALL X##ResizeVideoOutput(int width, int height); \
-    EXPORT void CALL X##FBRead(unsigned int addr); \
-    EXPORT void CALL X##FBWrite(unsigned int addr, unsigned int size); \
-    EXPORT void CALL X##FBGetFrameBufferInfo(void *p); \
-    \
-    gfx_plugin_functions gfx_##X = { \
-        X##PluginGetVersion, \
-        X##ChangeWindow, \
-        X##InitiateGFX, \
-        X##MoveScreen, \
-        X##ProcessDList, \
-        X##ProcessRDPList, \
-        X##RomClosed, \
-        X##RomOpen, \
-        X##ShowCFB, \
-        X##UpdateScreen, \
-        X##ViStatusChanged, \
-        X##ViWidthChanged, \
-        X##ReadScreen2, \
-        X##SetRenderingCallback, \
-        ResizeVideoOutput, \
-        X##FBRead, \
-        X##FBWrite, \
-        X##FBGetFrameBufferInfo \
-    }
-
+    EXPORT void CALL X##ChangeWindow(void);                                                             \
+    EXPORT int CALL X##InitiateGFX(GFX_INFO Gfx_Info);                                                  \
+    EXPORT void CALL X##MoveScreen(int x, int y);                                                       \
+    EXPORT void CALL X##ProcessDList(void);                                                             \
+    EXPORT void CALL X##ProcessRDPList(void);                                                           \
+    EXPORT void CALL X##RomClosed(void);                                                                \
+    EXPORT int CALL X##RomOpen(void);                                                                   \
+    EXPORT void CALL X##ShowCFB(void);                                                                  \
+    EXPORT void CALL X##UpdateScreen(void);                                                             \
+    EXPORT void CALL X##ViStatusChanged(void);                                                          \
+    EXPORT void CALL X##ViWidthChanged(void);                                                           \
+    EXPORT void CALL X##ReadScreen2(void *dest, int *width, int *height, int front);                    \
+    EXPORT void CALL X##SetRenderingCallback(void (*callback)(int));                                    \
+    EXPORT void CALL X##ResizeVideoOutput(int width, int height);                                       \
+    EXPORT void CALL X##FBRead(unsigned int addr);                                                      \
+    EXPORT void CALL X##FBWrite(unsigned int addr, unsigned int size);                                  \
+    EXPORT void CALL X##FBGetFrameBufferInfo(void *p);                                                  \
+                                                                                                        \
+    gfx_plugin_functions gfx_##X = {                                                                    \
+        X##PluginGetVersion,                                                                            \
+        X##ChangeWindow,                                                                                \
+        X##InitiateGFX,                                                                                 \
+        X##MoveScreen,                                                                                  \
+        X##ProcessDList,                                                                                \
+        X##ProcessRDPList,                                                                              \
+        X##RomClosed,                                                                                   \
+        X##RomOpen,                                                                                     \
+        X##ShowCFB,                                                                                     \
+        X##UpdateScreen,                                                                                \
+        X##ViStatusChanged,                                                                             \
+        X##ViWidthChanged,                                                                              \
+        X##ReadScreen2,                                                                                 \
+        X##SetRenderingCallback,                                                                        \
+        ResizeVideoOutput,                                                                              \
+        X##FBRead,                                                                                      \
+        X##FBWrite,                                                                                     \
+        X##FBGetFrameBufferInfo}
 
 DEFINE_GFX(angrylion);
 
@@ -105,9 +103,9 @@ extern m64p_error dummyaudio_PluginGetVersion(m64p_plugin_type *PluginType, int 
                                               int *APIVersion, const char **PluginNamePtr, int *Capabilities);
 extern void dummyaudio_AiDacrateChanged(int SystemType);
 extern void dummyaudio_AiLenChanged(void);
-extern int  dummyaudio_InitiateAudio(AUDIO_INFO Audio_Info);
+extern int dummyaudio_InitiateAudio(AUDIO_INFO Audio_Info);
 extern void dummyaudio_ProcessAList(void);
-extern int  dummyaudio_RomOpen(void);
+extern int dummyaudio_RomOpen(void);
 extern void dummyaudio_RomClosed(void);
 extern void dummyaudio_SetSpeedFactor(int percent);
 extern void dummyaudio_VolumeUp(void);
@@ -115,7 +113,7 @@ extern void dummyaudio_VolumeDown(void);
 extern int dummyaudio_VolumeGetLevel(void);
 extern void dummyaudio_VolumeSetLevel(int level);
 extern void dummyaudio_VolumeMute(void);
-extern const char * dummyaudio_VolumeGetString(void);
+extern const char *dummyaudio_VolumeGetString(void);
 
 const audio_plugin_functions dummy_audio = {
     dummyaudio_PluginGetVersion,
@@ -131,23 +129,20 @@ const audio_plugin_functions dummy_audio = {
     dummyaudio_VolumeGetLevel,
     dummyaudio_VolumeSetLevel,
     dummyaudio_VolumeMute,
-    dummyaudio_VolumeGetString
-};
-
+    dummyaudio_VolumeGetString};
 
 extern m64p_error inputPluginGetVersion(m64p_plugin_type *PluginType, int *PluginVersion,
-                                              int *APIVersion, const char **PluginNamePtr, int *Capabilities);
-extern void inputInitiateControllers (CONTROL_INFO ControlInfo);
-extern void inputGetKeys_default(int Control, BUTTONS * Keys );
+                                        int *APIVersion, const char **PluginNamePtr, int *Capabilities);
+extern void inputInitiateControllers(CONTROL_INFO ControlInfo);
+extern void inputGetKeys_default(int Control, BUTTONS *Keys);
 extern void inputControllerCommand(int Control, unsigned char *Command);
 extern void inputInitiateControllers(CONTROL_INFO ControlInfo);
 extern void inputReadController(int Control, unsigned char *Command);
-extern int  inputRomOpen(void);
+extern int inputRomOpen(void);
 extern void inputRomClosed(void);
 extern void dummyinput_SDL_KeyDown(int keymod, int keysym);
 extern void dummyinput_SDL_KeyUp(int keymod, int keysym);
 extern void dummyinput_RenderCallback(void);
-
 
 const input_plugin_functions dummy_input = {
     inputPluginGetVersion,
@@ -159,8 +154,7 @@ const input_plugin_functions dummy_input = {
     inputRomOpen,
     dummyinput_SDL_KeyDown,
     dummyinput_SDL_KeyUp,
-    dummyinput_RenderCallback
-};
+    dummyinput_RenderCallback};
 
 static AUDIO_INFO audio_info;
 static CONTROL_INFO control_info;
@@ -176,29 +170,27 @@ static void EmptyFunc(void)
 {
 }
 /* RSP */
-#define DEFINE_RSP(X) \
+#define DEFINE_RSP(X)                                                                                   \
     EXPORT m64p_error CALL X##PluginGetVersion(m64p_plugin_type *, int *, int *, const char **, int *); \
-    EXPORT unsigned int CALL X##DoRspCycles(unsigned int Cycles); \
-    EXPORT void CALL X##InitiateRSP(RSP_INFO Rsp_Info, unsigned int *CycleCount); \
-    EXPORT void CALL X##RomClosed(void); \
-    \
-    const rsp_plugin_functions rsp_##X = { \
-        X##PluginGetVersion, \
-        X##DoRspCycles, \
-        X##InitiateRSP, \
-        X##RomClosed \
-    }
+    EXPORT unsigned int CALL X##DoRspCycles(unsigned int Cycles);                                       \
+    EXPORT void CALL X##InitiateRSP(RSP_INFO Rsp_Info, unsigned int *CycleCount);                       \
+    EXPORT void CALL X##RomClosed(void);                                                                \
+                                                                                                        \
+    const rsp_plugin_functions rsp_##X = {                                                              \
+        X##PluginGetVersion,                                                                            \
+        X##DoRspCycles,                                                                                 \
+        X##InitiateRSP,                                                                                 \
+        X##RomClosed}
 
+DEFINE_RSP(parallelRSP);
 
-DEFINE_RSP(cxd4);
+static void (*l_mainRenderCallback)(int) = NULL;
+static ptr_SetRenderingCallback l_old1SetRenderingCallback = NULL;
 
-static void                     (*l_mainRenderCallback)(int) = NULL;
-static ptr_SetRenderingCallback   l_old1SetRenderingCallback = NULL;
-
-static void backcompat_videoRenderCallback(int unused)  // this function will be called by the video plugin as the render callback
+static void backcompat_videoRenderCallback(int unused) // this function will be called by the video plugin as the render callback
 {
     if (l_mainRenderCallback != NULL)
-        l_mainRenderCallback(1);  // assume screen is always freshly redrawn (otherwise screenshots won't work w/ OSD enabled)
+        l_mainRenderCallback(1); // assume screen is always freshly redrawn (otherwise screenshots won't work w/ OSD enabled)
 }
 
 static void backcompat_setRenderCallbackIntercept(void (*callback)(int))
@@ -210,20 +202,20 @@ m64p_error plugin_start_gfx(void)
 {
     printf("plugin_start_gfx\n");
 
-    uint8_t media = *((uint8_t*)mem_base_u32(g_mem_base, MM_CART_ROM) + (0x3b ^ S8));
+    uint8_t media = *((uint8_t *)mem_base_u32(g_mem_base, MM_CART_ROM) + (0x3b ^ S8));
 
     /* Here we feed 64DD IPL ROM header to GFX plugin if 64DD is present.
      * We use g_media_loader.get_dd_rom to detect 64DD presence
      * instead of g_dev because the latter is not yet initialized at plugin_start time */
     /* XXX: Not sure it is the best way to convey which game is being played to the GFX plugin
      * as 64DD IPL is the same for all 64DD games... */
-    char* dd_ipl_rom_filename = (g_media_loader.get_dd_rom == NULL)
-        ? NULL
-        : g_media_loader.get_dd_rom(g_media_loader.cb_data);
+    char *dd_ipl_rom_filename = (g_media_loader.get_dd_rom == NULL)
+                                    ? NULL
+                                    : g_media_loader.get_dd_rom(g_media_loader.cb_data);
 
     uint32_t rom_base = (dd_ipl_rom_filename != NULL && strlen(dd_ipl_rom_filename) != 0 && media != 'C')
-        ? MM_DD_ROM
-        : MM_CART_ROM;
+                            ? MM_DD_ROM
+                            : MM_CART_ROM;
 
     free(dd_ipl_rom_filename);
 
@@ -256,10 +248,10 @@ m64p_error plugin_start_gfx(void)
     gfx_info.VI_X_SCALE_REG = &(g_dev.vi.regs[VI_X_SCALE_REG]);
     gfx_info.VI_Y_SCALE_REG = &(g_dev.vi.regs[VI_Y_SCALE_REG]);
     gfx_info.CheckInterrupts = EmptyFunc;
-    
-    gfx_info.version = 2; //Version 2 added SP_STATUS_REG and RDRAM_SIZE
+
+    gfx_info.version = 2; // Version 2 added SP_STATUS_REG and RDRAM_SIZE
     gfx_info.SP_STATUS_REG = &g_dev.sp.regs[SP_STATUS_REG];
-    gfx_info.RDRAM_SIZE = (unsigned int*) &g_dev.rdram.dram_size;
+    gfx_info.RDRAM_SIZE = (unsigned int *)&g_dev.rdram.dram_size;
 
     /* call the audio plugin */
     if (!gfx.initiateGFX(gfx_info))
@@ -308,12 +300,12 @@ static m64p_error plugin_start_input(void)
 
     /* fill in the CONTROL_INFO data structure */
     control_info.Controls = Controls;
-    for (i=0; i<4; i++)
-      {
-         Controls[i].Present = 0;
-         Controls[i].RawData = 0;
-         Controls[i].Plugin = PLUGIN_NONE;
-      }
+    for (i = 0; i < 4; i++)
+    {
+        Controls[i].Present = 0;
+        Controls[i].RawData = 0;
+        Controls[i].Plugin = PLUGIN_NONE;
+    }
 
     /* call the input plugin */
     input.initiateControllers(control_info);
@@ -359,18 +351,18 @@ static m64p_error plugin_start_rsp(void)
 
 m64p_error plugin_start(m64p_plugin_type type)
 {
-    switch(type)
+    switch (type)
     {
-        case M64PLUGIN_RSP:
-            return plugin_start_rsp();
-        case M64PLUGIN_GFX:
-            return plugin_start_gfx();
-        case M64PLUGIN_AUDIO:
-            return plugin_start_audio();
-        case M64PLUGIN_INPUT:
-            return plugin_start_input();
-        default:
-            return M64ERR_INPUT_INVALID;
+    case M64PLUGIN_RSP:
+        return plugin_start_rsp();
+    case M64PLUGIN_GFX:
+        return plugin_start_gfx();
+    case M64PLUGIN_AUDIO:
+        return plugin_start_audio();
+    case M64PLUGIN_INPUT:
+        return plugin_start_input();
+    default:
+        return M64ERR_INPUT_INVALID;
     }
 
     return M64ERR_INTERNAL;
@@ -400,19 +392,18 @@ void plugin_connect_all()
 
     gfx = gfx_angrylion;
 
-
     l_GfxAttached = 1;
     plugin_start_gfx();
 
-    rsp = rsp_cxd4;
+    rsp = rsp_parallelRSP;
 
     l_RspAttached = 1;
     plugin_start_rsp();
 
     audio = dummy_audio;
     l_AudioAttached = 1;
-    //plugin_start_audio();
-    
+    // plugin_start_audio();
+
     input = dummy_input;
     l_InputAttached = 1;
     plugin_start_input();
@@ -431,11 +422,10 @@ void plugin_connect_all()
 
     audio = dummy_audio;
     l_AudioAttached = 1;
-    //plugin_start_audio();
-    
+    // plugin_start_audio();
+
     input = dummy_input;
     l_InputAttached = 1;
     plugin_start_input();
 }
 #endif
-
