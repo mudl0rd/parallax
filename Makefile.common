@@ -101,7 +101,7 @@ SOURCES_C += $(ROOT_DIR)/deps/glad.c
 
 ifneq (,$(findstring win,$(platform)))
 	SOURCES_C += $(ROOT_DIR)/custom/osal/osal_files_win32.c
-	SOURCES_C += $(ROOT_DIR)/deps/mman.c
+	SOURCES_C += $(ROOT_DIR)/deps/sys/mman.c
 else
 	SOURCES_C += $(ROOT_DIR)/custom/osal/osal_files_unix.c
 endif
