@@ -2,6 +2,7 @@ CORE_DIR           = $(ROOT_DIR)
 LIBRETRO_COMM_DIR  = $(ROOT_DIR)/deps/libretro-common
 VIDEODIR_PARALLEL  =  $(CORE_DIR)/src/device/rcp/rdp/p_rdp
 PARALLEL_RDP_IMPLEMENTATION = $(CORE_DIR)/src/device/rcp/rdp/p_rdp
+RSPDIR_PARALLEL    =  $(CORE_DIR)/src/device/rcp/rsp/p_rsp
 
 DYNAREC_USED := 0
 
@@ -100,6 +101,7 @@ SOURCES_C += $(ROOT_DIR)/deps/glad.c
 
 ifneq (,$(findstring win,$(platform)))
 	SOURCES_C += $(ROOT_DIR)/custom/osal/osal_files_win32.c
+	SOURCES_C += $(ROOT_DIR)/deps/mman.c
 else
 	SOURCES_C += $(ROOT_DIR)/custom/osal/osal_files_unix.c
 endif
@@ -132,7 +134,32 @@ SOURCES_C += $(ROOT_DIR)/src/libretro.c \
 	$(ROOT_DIR)/src/api/vidext_libretro.c \
 
 
-SOURCES_C += $(CORE_DIR)/src/device/rcp/rsp/cxd4/rsp.c
+	PARALLEL_RSP_ARCH := simd
+	SOURCES_CXX += $(RSPDIR_PARALLEL)/parallel.cpp \
+				   $(RSPDIR_PARALLEL)/rsp_disasm.cpp \
+				   $(RSPDIR_PARALLEL)/jit_allocator.cpp \
+				   $(wildcard $(RSPDIR_PARALLEL)/rsp/*.cpp) \
+				   $(wildcard $(RSPDIR_PARALLEL)/arch/$(PARALLEL_RSP_ARCH)/rsp/*.cpp)
+ifneq ($(DEBUG_JIT),)
+	CXXFLAGS += -DDEBUG_JIT
+	SOURCES_CXX += $(RSPDIR_PARALLEL)/debug_jit.cpp \
+				   $(RSPDIR_PARALLEL)/rsp.cpp
+	LDFLAGS += -ldl
+else
+	SOURCES_CXX += $(RSPDIR_PARALLEL)/rsp_jit.cpp
+	SOURCES_C += \
+				 $(RSPDIR_PARALLEL)/lightning/lib/jit_disasm.c \
+				 $(RSPDIR_PARALLEL)/lightning/lib/jit_memory.c \
+				 $(RSPDIR_PARALLEL)/lightning/lib/jit_names.c \
+				 $(RSPDIR_PARALLEL)/lightning/lib/jit_note.c \
+				 $(RSPDIR_PARALLEL)/lightning/lib/jit_print.c \
+				 $(RSPDIR_PARALLEL)/lightning/lib/jit_size.c \
+				 $(RSPDIR_PARALLEL)/lightning/lib/lightning.c
+endif
+
+	CXXFLAGS += -I$(RSPDIR_PARALLEL)/arch/$(PARALLEL_RSP_ARCH)/rsp -I$(RSPDIR_PARALLEL)/lightning/include
+	CFLAGS += -DHAVE_PARALLEL_RSP -DPARALLEL_INTEGRATION -I$(RSPDIR_PARALLEL)/lightning/include
+	CXXFLAGS += -DHAVE_PARALLEL_RSP -DPARALLEL_INTEGRATION
 
 ifeq ($(HAVE_NEON),1)
 	SOURCES_ASM += $(LIBRETRO_COMM_DIR)/audio/conversion/float_to_s16_neon.S \
