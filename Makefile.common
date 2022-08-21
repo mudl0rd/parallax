@@ -16,7 +16,7 @@ INCFLAGS += \
 	-I$(CORE_DIR)/src/device/rcp/rdp
 
 ifneq (,$(findstring win,$(platform)))
-	INCFLAGS += -I$(ROOT_DIR)/custom/mman-win32
+	INCFLAGS += -I$(ROOT_DIR)/deps/mman
 endif
 
 SOURCES_C = \
@@ -101,7 +101,7 @@ SOURCES_C += $(ROOT_DIR)/deps/glad.c
 
 ifneq (,$(findstring win,$(platform)))
 	SOURCES_C += $(ROOT_DIR)/custom/osal/osal_files_win32.c
-	SOURCES_C += $(ROOT_DIR)/deps/sys/mman.c
+	SOURCES_C += $(ROOT_DIR)/deps/mman/sys/mman.c
 else
 	SOURCES_C += $(ROOT_DIR)/custom/osal/osal_files_unix.c
 endif
