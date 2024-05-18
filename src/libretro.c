@@ -92,7 +92,6 @@ save_memory_data saved_memory;
 
 static uint8_t *game_data = NULL;
 static uint32_t game_size = 0;
-
 static bool emu_initialized = false;
 static unsigned audio_buffer_size = 2048;
 
@@ -100,7 +99,6 @@ static unsigned retro_filtering = 0;
 static bool first_context_reset = false;
 static bool initializing = true;
 static bool load_game_successful = false;
-
 bool libretro_swap_buffer;
 
 float retro_screen_aspect = 4.0 / 3.0;
@@ -397,7 +395,7 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
     info->geometry.base_height = 480;
     info->geometry.max_width = 640;
     info->geometry.max_height = 480;
-    info->geometry.aspect_ratio = 640 / 480;
+    info->geometry.aspect_ratio = 640.0 / 480.0;
     info->timing.fps = vi_expected_refresh_rate_from_tv_standard(ROM_PARAMS.systemtype);
     info->timing.sample_rate = 44100.0;
 }
@@ -676,15 +674,15 @@ void retro_run(void)
 
     if (libretro_swap_buffer)
     {
-        video_cb(RETRO_HW_FRAME_BUFFER_VALID, 640, 480, 0);
+        video_cb(RETRO_HW_FRAME_BUFFER_VALID, 640,480, 0);
     }
     else
     {
         glBindFramebuffer(GL_FRAMEBUFFER, hw_render.get_current_framebuffer());
         glClearColor(0.0, 0.0, 0.0, 1.0);
-        glViewport(0, 0, 640, 480);
+        glViewport(0, 0, 640,480);
         glClear(GL_COLOR_BUFFER_BIT);
-        video_cb(RETRO_HW_FRAME_BUFFER_VALID, 640, 480, 0);
+        video_cb(RETRO_HW_FRAME_BUFFER_VALID, 640,480, 0);
     }
 }
 
@@ -729,11 +727,13 @@ size_t retro_serialize_size(void)
 
 bool retro_serialize(void *data, size_t size)
 {
+    main_statesave(data);
     return false;
 }
 
 bool retro_unserialize(const void *data, size_t size)
 {
+    main_stateload(data);
     return false;
 }
 

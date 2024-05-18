@@ -1,4 +1,4 @@
-/* Copyright (c) 2017-2022 Hans-Kristian Arntzen
+/* Copyright (c) 2017-2023 Hans-Kristian Arntzen
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -46,15 +46,37 @@ void SemaphoreHolder::recycle_semaphore()
 
 	if (internal_sync)
 	{
-		if (semaphore_type == VK_SEMAPHORE_TYPE_TIMELINE_KHR || external_compatible_features || is_signalled())
+		if (semaphore_type == VK_SEMAPHORE_TYPE_TIMELINE_KHR || external_compatible_features)
+		{
 			device->destroy_semaphore_nolock(semaphore);
+		}
+		else if (is_signalled())
+		{
+			// We can't just destroy a semaphore if we don't know who signals it (e.g. WSI).
+			// Have to consume it by waiting then recycle.
+			if (signal_is_foreign_queue)
+				device->consume_semaphore_nolock(semaphore);
+			else
+				device->destroy_semaphore_nolock(semaphore);
+		}
 		else
 			device->recycle_semaphore_nolock(semaphore);
 	}
 	else
 	{
-		if (semaphore_type == VK_SEMAPHORE_TYPE_TIMELINE_KHR || external_compatible_features || is_signalled())
+		if (semaphore_type == VK_SEMAPHORE_TYPE_TIMELINE_KHR || external_compatible_features)
+		{
 			device->destroy_semaphore(semaphore);
+		}
+		else if (is_signalled())
+		{
+			// We can't just destroy a semaphore if we don't know who signals it (e.g. WSI).
+			// Have to consume it by waiting then recycle.
+			if (signal_is_foreign_queue)
+				device->consume_semaphore(semaphore);
+			else
+				device->destroy_semaphore(semaphore);
+		}
 		else
 			device->recycle_semaphore(semaphore);
 	}

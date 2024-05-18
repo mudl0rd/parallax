@@ -12,7 +12,6 @@ extern "C"
     extern int32_t vk_rescaling;
     extern bool vk_ssreadbacks;
     extern bool vk_ssdither;
-
     extern unsigned vk_overscan;
     extern unsigned vk_vertical_stretch;
     extern unsigned vk_downscaling_steps;

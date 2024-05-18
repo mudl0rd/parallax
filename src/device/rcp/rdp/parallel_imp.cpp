@@ -220,6 +220,9 @@ void screen_write(int width, int height)
 						GL_RGBA, GL_UNSIGNED_BYTE, offset);
 	}
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hw_render.get_current_framebuffer());
+	glViewport(0,0,640,480);
+	glScissor(0,0,640,480);
 	glBindProgramPipeline(program.pid);
 	glActiveTexture(GL_TEXTURE0);
 	glClearColor(0.0, 0.0, 0.0, 1.0);
@@ -228,6 +231,7 @@ void screen_write(int width, int height)
 	glDrawArrays(GL_TRIANGLES, 0, 3);
 	glBindVertexArray(0);
 	glBindProgramPipeline(0);
+	glBindFramebuffer(GL_FRAMEBUFFER, hw_render.get_current_framebuffer());
 	rotate_buffer = (rotate_buffer + 1) % TEX_NUM;
 }
 
@@ -255,17 +259,13 @@ void vk_blit(unsigned &width, unsigned &height)
 		}
 		width = scanout.width;
 		height = scanout.height;
-		retro_width = width;
-		retro_height = height;
-		retro_pitch = width * sizeof(uint32_t);
-
 		scanout.fence->wait();
 		uint8_t *color_data = screen_get_texture_data();
 		memcpy(color_data, device->map_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT),
 			   width * height * sizeof(uint32_t));
 		device->unmap_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
 
-		screen_write(retro_width, retro_height);
+		screen_write(width, height);
 	}
 }
 

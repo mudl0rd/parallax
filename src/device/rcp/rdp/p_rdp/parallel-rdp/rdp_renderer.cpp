@@ -20,6 +20,7 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#define NOMINMAX
 #include "rdp_renderer.hpp"
 #include "rdp_device.hpp"
 #include "logging.hpp"
@@ -27,6 +28,7 @@
 #include "luts.hpp"
 #include "timer.hpp"
 #include <limits>
+#include <stdlib.h>
 #ifdef PARALLEL_RDP_SHADER_DIR
 #include "global_managers.hpp"
 #include "os_filesystem.hpp"
@@ -120,6 +122,11 @@ void Renderer::set_device(Vulkan::Device *device_)
 	device = device_;
 }
 
+void Renderer::set_validation_interface(ValidationInterface *iface)
+{
+	validation_iface = iface;
+}
+
 bool Renderer::init_caps()
 {
 	auto &features = device->get_device_features();
@@ -151,9 +158,9 @@ bool Renderer::init_caps()
 
 	bool allow_small_types = true;
 	bool forces_small_types = false;
-	if (const char *small = getenv("PARALLEL_RDP_SMALL_TYPES"))
+	if (const char *small_type = getenv("PARALLEL_RDP_SMALL_TYPES"))
 	{
-		allow_small_types = strtol(small, nullptr, 0) > 0;
+		allow_small_types = strtol(small_type, nullptr, 0) > 0;
 		forces_small_types = true;
 		LOGI("Allow small types = %d.\n", int(allow_small_types));
 	}
@@ -579,7 +586,7 @@ bool Renderer::init_internal_upscaling_factor(const RendererOptions &options)
 	{
 		auto cmd = device->request_command_buffer();
 		cmd->fill_buffer(*upscaling_multisampled_hidden_rdram, 0x03030303);
-		cmd->barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+		cmd->barrier(VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
 		             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
 		             VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT);
 		device->submit(cmd);
@@ -1293,6 +1300,7 @@ StaticRasterizationState Renderer::normalize_static_state(StaticRasterizationSta
 		              RASTERIZATION_USE_STATIC_TEXTURE_SIZE_FORMAT_BIT |
 		              RASTERIZATION_TEX_LOD_ENABLE_BIT |
 		              RASTERIZATION_DETAIL_LOD_ENABLE_BIT |
+		              RASTERIZATION_PERSPECTIVE_CORRECT_BIT |
 		              RASTERIZATION_ALPHA_TEST_BIT);
 
 		auto fmt = state.texture_fmt;
@@ -1404,8 +1412,50 @@ void Renderer::fixup_triangle_setup(TriangleSetup &setup) const
 		setup.flags |= TRIANGLE_SETUP_FILL_COPY_RASTER_BIT;
 }
 
+void Renderer::validate_draw_state() const
+{
+	if ((stream.static_raster_state.flags & RASTERIZATION_FILL_BIT) != 0)
+	{
+		if (fb.fmt == FBFormat::I4)
+		{
+			validation_iface->report_rdp_crash(ValidationError::Fill4bpp,
+			                                   "Attempted to use Fill mode on 4bpp surface.");
+		}
+
+		if ((stream.depth_blend_state.flags & DEPTH_BLEND_DEPTH_TEST_BIT) != 0)
+		{
+			validation_iface->report_rdp_crash(ValidationError::FillDepthTest,
+			                                   "Attempted to use Fill mode with depth test.");
+		}
+
+		if ((stream.depth_blend_state.flags & DEPTH_BLEND_IMAGE_READ_ENABLE_BIT) != 0)
+		{
+			validation_iface->report_rdp_crash(ValidationError::FillImageReadEnable,
+			                                   "Attempted to use Fill mode with image read enable.");
+		}
+
+		if ((stream.depth_blend_state.flags & DEPTH_BLEND_DEPTH_UPDATE_BIT) != 0 &&
+		    !constants.use_prim_depth)
+		{
+			validation_iface->report_rdp_crash(ValidationError::FillDepthWrite,
+			                                   "Attempted to use Fill mode with depth write enabled.");
+		}
+	}
+	else if ((stream.static_raster_state.flags & RASTERIZATION_COPY_BIT) != 0)
+	{
+		if (fb.fmt == FBFormat::RGBA8888)
+		{
+			validation_iface->report_rdp_crash(ValidationError::Copy32bpp,
+			                                   "Attempted to use Copy mode on 32bpp surface.");
+		}
+	}
+}
+
 void Renderer::draw_shaded_primitive(TriangleSetup &setup, const AttributeSetup &attr)
 {
+	if (validation_iface)
+		validate_draw_state();
+
 	fixup_triangle_setup(setup);
 
 	unsigned num_tiles = compute_conservative_max_num_tiles(setup);
@@ -1566,8 +1616,8 @@ void Renderer::RenderBuffersUpdater::upload(Vulkan::Device &device, const Render
 
 	if (did_upload)
 	{
-		cmd.barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-		            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+		cmd.barrier(VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+		            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
 	}
 }
 
@@ -1602,7 +1652,7 @@ void Renderer::update_tmem_instances(Vulkan::CommandBuffer &cmd)
 	{
 		end_ts = cmd.write_timestamp(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 		device->register_time_interval("RDP GPU", std::move(start_ts), std::move(end_ts),
-		                               "tmem-update", std::to_string(stream.tmem_upload_infos.size()));
+		                               "tmem-update");
 	}
 	cmd.end_region();
 }
@@ -2188,16 +2238,16 @@ void Renderer::submit_render_pass(Vulkan::CommandBuffer &cmd)
 	if (need_tmem_upload)
 		update_tmem_instances(cmd);
 
-	cmd.barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+	cmd.barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
 	            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | (!caps.ubershader ? VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT : 0),
-	            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
+	            VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
 	            (!caps.ubershader ? VK_ACCESS_INDIRECT_COMMAND_READ_BIT : 0));
 
 	if (need_render_pass && !caps.ubershader)
 	{
 		submit_rasterization(cmd, need_tmem_upload ? *tmem_instances : *tmem, false);
-		cmd.barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-		            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+		cmd.barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+		            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
 	}
 
 	if (need_render_pass)
@@ -2208,9 +2258,9 @@ void Renderer::submit_render_pass(Vulkan::CommandBuffer &cmd)
 
 	if (render_pass_is_upscaled())
 	{
-		cmd.barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+		cmd.barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
 		            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-		            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+		            VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
 
 		// TODO: Could probably do this reference update in the render pass itself,
 		// just write output to two buffers ... This is more composable for now.
@@ -2220,10 +2270,7 @@ void Renderer::submit_render_pass(Vulkan::CommandBuffer &cmd)
 	if (caps.timestamp >= 1)
 	{
 		render_pass_end = cmd.write_timestamp(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
-		std::string tag;
-		tag = "(" + std::to_string(fb.width) + " x " + std::to_string(fb.deduced_height) + ")";
-		tag += " (" + std::to_string(stream.triangle_setup.size()) + " triangles)";
-		device->register_time_interval("RDP GPU", std::move(render_pass_start), std::move(render_pass_end), "render-pass", std::move(tag));
+		device->register_time_interval("RDP GPU", std::move(render_pass_start), std::move(render_pass_end), "render-pass");
 	}
 }
 
@@ -2246,19 +2293,19 @@ void Renderer::submit_render_pass_upscaled(Vulkan::CommandBuffer &cmd)
 			update_tmem_instances(cmd);
 	}
 
-	cmd.barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+	cmd.barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
 	            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
 	            (!caps.ubershader ? VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT : 0),
-	            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
+	            VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
 	            (!caps.ubershader ? VK_ACCESS_INDIRECT_COMMAND_READ_BIT : 0));
 
 	if (!caps.ubershader)
 	{
 		submit_rasterization(cmd, need_tmem_upload ? *tmem_instances : *tmem, true);
 		cmd.barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-		            VK_ACCESS_SHADER_WRITE_BIT,
+		            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
 		            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-		            VK_ACCESS_SHADER_READ_BIT);
+		            VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
 	}
 
 	submit_depth_blend(cmd, need_tmem_upload ? *tmem_instances : *tmem, true, caps.super_sample_readback);
@@ -2268,9 +2315,9 @@ void Renderer::submit_render_pass_upscaled(Vulkan::CommandBuffer &cmd)
 	if (caps.super_sample_readback)
 	{
 		cmd.begin_region("ssaa-resolve");
-		cmd.barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+		cmd.barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
 		            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-		            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+		            VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
 
 		submit_update_upscaled_domain(cmd, ResolveStage::SSAAResolve);
 		cmd.end_region();
@@ -2287,9 +2334,9 @@ void Renderer::submit_render_pass_upscaled(Vulkan::CommandBuffer &cmd)
 void Renderer::submit_render_pass_end(Vulkan::CommandBuffer &cmd)
 {
 	base_primitive_index += uint32_t(stream.triangle_setup.size());
-	cmd.barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
+	cmd.barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
 	            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-	            VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
+	            VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
 }
 
 void Renderer::maintain_queues()
@@ -2372,7 +2419,7 @@ void Renderer::submit_to_queue()
 	bool need_memory_flush = pending_host_visible_render_passes && !pending_upscaled_passes;
 	stream.cmd->barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 	                    need_memory_flush ? VK_ACCESS_MEMORY_WRITE_BIT : 0,
-	                    (need_host_barrier ? VK_PIPELINE_STAGE_HOST_BIT : VK_PIPELINE_STAGE_TRANSFER_BIT),
+	                    (need_host_barrier ? VK_PIPELINE_STAGE_2_HOST_BIT : VK_PIPELINE_STAGE_2_COPY_BIT),
 	                    (need_host_barrier ? VK_ACCESS_HOST_READ_BIT : VK_ACCESS_TRANSFER_READ_BIT));
 
 	Vulkan::Fence fence;
@@ -2610,14 +2657,14 @@ void Renderer::resolve_coherency_gpu_to_host(CoherencyOperation &op, Vulkan::Com
 //#define COHERENCY_READBACK_TIMESTAMPS
 #ifdef COHERENCY_READBACK_TIMESTAMPS
 			Vulkan::QueryPoolHandle start_ts, end_ts;
-			start_ts = cmd.write_timestamp(VK_PIPELINE_STAGE_TRANSFER_BIT);
+			start_ts = cmd.write_timestamp(VK_PIPELINE_STAGE_2_COPY_BIT);
 #endif
 			cmd.copy_buffer(*incoherent.staging_readback, *rdram, copies.data(), copies.size());
 #ifdef COHERENCY_READBACK_TIMESTAMPS
-			end_ts = cmd.write_timestamp(VK_PIPELINE_STAGE_TRANSFER_BIT);
+			end_ts = cmd.write_timestamp(VK_PIPELINE_STAGE_2_COPY_BIT);
 			device->register_time_interval(std::move(start_ts), std::move(end_ts), "coherency-readback");
 #endif
-			cmd.barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+			cmd.barrier(VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
 			            VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 			            VK_ACCESS_HOST_READ_BIT);
 		}
@@ -2815,15 +2862,15 @@ void Renderer::resolve_coherency_host_to_gpu(Vulkan::CommandBuffer &cmd)
 
 	if (!to_clear_write_mask.empty() || !masked_page_copies.empty())
 	{
-		cmd.barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-		            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+		cmd.barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+		            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
 	}
 
 	// If we cannot map the device memory, copy. We're latency sensitive, so don't use DMA queue.
 	if (!buffer_copies.empty())
 	{
 		cmd.barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
-		            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
+		            VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
 
 //#define COHERENCY_COPY_TIMESTAMPS
 #ifdef COHERENCY_COPY_TIMESTAMPS
@@ -2832,12 +2879,12 @@ void Renderer::resolve_coherency_host_to_gpu(Vulkan::CommandBuffer &cmd)
 #endif
 		cmd.copy_buffer(*rdram, *incoherent.staging_rdram, buffer_copies.data(), buffer_copies.size());
 #ifdef COHERENCY_COPY_TIMESTAMPS
-		end_ts = cmd->write_timestamp(VK_PIPELINE_STAGE_TRANSFER_BIT);
+		end_ts = cmd->write_timestamp(VK_PIPELINE_STAGE_2_COPY_BIT);
 		device->register_time_interval(std::move(start_ts), std::move(end_ts), "coherent-copy");
 #endif
 
-		cmd.barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
-		            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+		cmd.barrier(VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+		            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
 	}
 
 	if (caps.timestamp)
@@ -2967,8 +3014,9 @@ void Renderer::ensure_command_buffer()
 		device->set_name(*indirect_dispatch_buffer, "indirect-dispatch-buffer");
 
 		clear_indirect_buffer(*stream.cmd);
-		stream.cmd->barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-		                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
+		stream.cmd->barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+		                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+							VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT | VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
 	}
 }
 
@@ -3040,6 +3088,15 @@ bool Renderer::tmem_upload_needs_flush(uint32_t addr) const
 
 void Renderer::load_tile(uint32_t tile, const LoadTileInfo &info)
 {
+	if (validation_iface && info.mode == UploadMode::TLUT)
+	{
+		if ((info.thi >> 2) > (info.tlo >> 2))
+		{
+			validation_iface->report_rdp_crash(ValidationError::InvalidMultilineLoadTlut,
+			                                   "Attempting to load multiple lines in TLUT.");
+		}
+	}
+
 	if (tmem_upload_needs_flush(info.tex_addr))
 		flush_queues();
 
@@ -3056,7 +3113,7 @@ void Renderer::load_tile(uint32_t tile, const LoadTileInfo &info)
 	else
 	{
 		unsigned pixel_count = ((info.shi - info.slo) + 1) & 0xfff;
-		if (!pixel_count)
+		if (!pixel_count || pixel_count > 2048)
 			return;
 	}
 
@@ -3171,6 +3228,8 @@ void Renderer::load_tile_iteration(uint32_t tile, const LoadTileInfo &info, uint
 	if (info.size == TextureSize::Bpp4)
 	{
 		LOGE("4-bit VRAM pointer crashes the RDP.\n");
+		if (validation_iface)
+			validation_iface->report_rdp_crash(ValidationError::LoadTile4bpp, "4-bit VRAM pointer crashes the RDP.");
 		return;
 	}
 
@@ -3506,7 +3565,7 @@ void Renderer::PipelineExecutor::perform_work(const Vulkan::DeferredPipelineComp
 	Vulkan::CommandBuffer::build_compute_pipeline(device, compile, Vulkan::CommandBuffer::CompileMode::AsyncThread);
 	auto end_ts = device->write_calibrated_timestamp();
 	device->register_time_interval("RDP Pipeline", std::move(start_ts), std::move(end_ts),
-	                               "pipeline-compilation", std::to_string(compile.hash));
+	                               "pipeline-compilation");
 }
 
 bool Renderer::PipelineExecutor::is_sentinel(const Vulkan::DeferredPipelineCompile &compile) const

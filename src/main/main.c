@@ -366,6 +366,16 @@ static void video_plugin_render_callback(int bScreenRedrawn)
     }
 }
 
+void main_stateload(void *data)
+{
+  savestates_load_m64p(&g_dev, data);
+}
+
+void main_statesave(void *data)
+{
+    savestates_save_m64p(&g_dev, data);
+}
+
 void new_frame(void)
 {
     if (g_FrameCallback != NULL)

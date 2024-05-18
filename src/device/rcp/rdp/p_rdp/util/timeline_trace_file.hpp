@@ -1,4 +1,4 @@
-/* Copyright (c) 2017-2022 Hans-Kristian Arntzen
+/* Copyright (c) 2017-2023 Hans-Kristian Arntzen
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -58,6 +58,16 @@ public:
 	Event *allocate_event();
 	void submit_event(Event *e);
 
+	struct ScopedEvent
+	{
+		ScopedEvent(TimelineTraceFile *file, const char *tag);
+		~ScopedEvent();
+		void operator=(const ScopedEvent &) = delete;
+		ScopedEvent(const ScopedEvent &) = delete;
+		TimelineTraceFile *file = nullptr;
+		Event *event = nullptr;
+	};
+
 private:
 	void looper(std::string path);
 	std::thread thr;
@@ -67,4 +77,14 @@ private:
 	ThreadSafeObjectPool<Event> event_pool;
 	std::queue<Event *> queued_events;
 };
+
+#ifndef GRANITE_SHIPPING
+#define GRANITE_SCOPED_TIMELINE_EVENT(str) \
+	::Util::TimelineTraceFile::ScopedEvent _timeline_scoped_count_##__COUNTER__{GRANITE_THREAD_GROUP()->get_timeline_trace_file(), str}
+#define GRANITE_SCOPED_TIMELINE_EVENT_FILE(file, str) \
+	::Util::TimelineTraceFile::ScopedEvent _timeline_scoped_count_##__COUNTER__{file, str}
+#else
+#define GRANITE_SCOPED_TIMELINE_EVENT(...) ((void)0)
+#define GRANITE_SCOPED_TIMELINE_EVENT_FILE(...) ((void)0)
+#endif
 }

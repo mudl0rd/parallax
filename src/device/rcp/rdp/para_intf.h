@@ -15,9 +15,6 @@ extern "C"
     void video_render(void);
     void screen_swap(bool blank);
     void init_framebuffer(int width, int height);
-    int retro_width;
-    int retro_height;
-    int retro_pitch;
 #ifdef __cplusplus
 }
 #endif

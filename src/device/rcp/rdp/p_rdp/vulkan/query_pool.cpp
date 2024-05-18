@@ -1,4 +1,4 @@
-/* Copyright (c) 2017-2022 Hans-Kristian Arntzen
+/* Copyright (c) 2017-2023 Hans-Kristian Arntzen
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -23,8 +23,6 @@
 #include "query_pool.hpp"
 #include "device.hpp"
 #include <utility>
-
-using namespace std;
 
 namespace Vulkan
 {
@@ -382,16 +380,18 @@ void QueryPool::add_pool()
 	if (device->get_device_features().host_query_reset_features.hostQueryReset)
 		table.vkResetQueryPoolEXT(device->get_device(), pool.pool, 0, pool.size);
 
-	pools.push_back(move(pool));
+	pools.push_back(std::move(pool));
 }
 
-QueryPoolHandle QueryPool::write_timestamp(VkCommandBuffer cmd, VkPipelineStageFlagBits stage)
+QueryPoolHandle QueryPool::write_timestamp(VkCommandBuffer cmd, VkPipelineStageFlags2 stage)
 {
 	if (!supports_timestamp)
 	{
 		LOGI("Timestamps are not supported on this implementation.\n");
 		return {};
 	}
+
+	VK_ASSERT((stage & (stage - 1)) == 0);
 
 	if (pools[pool_index].index >= pools[pool_index].size)
 		pool_index++;
@@ -406,7 +406,14 @@ QueryPoolHandle QueryPool::write_timestamp(VkCommandBuffer cmd, VkPipelineStageF
 
 	if (!device->get_device_features().host_query_reset_features.hostQueryReset)
 		table.vkCmdResetQueryPool(cmd, pool.pool, pool.index, 1);
-	table.vkCmdWriteTimestamp(cmd, stage, pool.pool, pool.index);
+
+	if (device->get_device_features().sync2_features.synchronization2)
+		table.vkCmdWriteTimestamp2KHR(cmd, stage, pool.pool, pool.index);
+	else
+	{
+		table.vkCmdWriteTimestamp(cmd, static_cast<VkPipelineStageFlagBits>(convert_vk_src_stage2(stage)),
+		                          pool.pool, pool.index);
+	}
 
 	pool.index++;
 	return cookie;
@@ -460,7 +467,7 @@ double TimestampInterval::get_time_per_accumulation() const
 		return 0.0;
 }
 
-const string &TimestampInterval::get_tag() const
+const std::string &TimestampInterval::get_tag() const
 {
 	return tag;
 }
@@ -472,8 +479,8 @@ void TimestampInterval::reset()
 	total_frame_iterations = 0;
 }
 
-TimestampInterval::TimestampInterval(string tag_)
-	: tag(move(tag_))
+TimestampInterval::TimestampInterval(std::string tag_)
+	: tag(std::move(tag_))
 {
 }
 
