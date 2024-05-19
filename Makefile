@@ -1,9 +1,9 @@
-DEBUG = 0
+DEBUG = 1
 FORCE_GLES ?= 0
 FORCE_GLES3 ?= 0
 LLE ?= 0
-HAVE_PARALLEL_RSP ?= 0
-HAVE_PARALLEL_RDP ?= 0
+HAVE_PARALLEL_RSP ?= 1
+HAVE_PARALLEL_RDP ?= 1
 
 SYSTEM_MINIZIP ?= 0
 SYSTEM_LIBPNG ?= 0
@@ -477,7 +477,7 @@ else ifeq ($(platform), emscripten)
 # Windows
 else
    TARGET := $(TARGET_NAME).dll
-   LDFLAGS += -shared -static-libgcc -static-libstdc++ -Wl,--version-script=$(ROOT_DIR)/src/link.T
+   LDFLAGS += -shared -Wl,--version-script=$(ROOT_DIR)/src/link.T
    
    ifeq ($(MSYSTEM),MINGW64)
       CC ?= x86_64-w64-mingw32-gcc
@@ -526,13 +526,13 @@ endif
 COREFLAGS += -D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS -D__LIBRETRO__ -DUSE_FILE32API -DM64P_PLUGIN_API -DM64P_CORE_PROTOTYPES -D_ENDUSER_RELEASE -DSINC_LOWER_QUALITY -DTXFILTER_LIB -D__VEC4_OPT -DMUPENPLUSAPI
 
 ifeq ($(DEBUG), 1)
-   CPUOPTS += -O1 -g
+   CPUOPTS += -O0 -g
    CPUOPTS += -DOPENGL_DEBUG
    CPUOPTS += -DNDEBUG -fsigned-char -fvisibility=hidden
 else
    CPUOPTS += -DNDEBUG -fsigned-char -ffast-math -fno-strict-aliasing -fomit-frame-pointer -fvisibility=hidden
 ifneq ($(platform), libnx)
-   CPUOPTS := -Ofast $(CPUOPTS)
+   CPUOPTS := $(CPUOPTS)
 endif
    CXXFLAGS += -fvisibility-inlines-hidden
 endif
@@ -566,7 +566,7 @@ endif
 ifeq ($(platform), ios-arm64)
 	LDFLAGS    += $(fpic) -O3 $(CPUOPTS) $(PLATCFLAGS) $(CPUFLAGS)
 else
-	LDFLAGS    += $(fpic) -O3 $(CPUOPTS) $(PLATCFLAGS) $(CPUFLAGS)
+	LDFLAGS    += $(fpic) $(CPUOPTS) $(PLATCFLAGS) $(CPUFLAGS)
 endif
 
 -include $(OBJECTS:.o=.d)

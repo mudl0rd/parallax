@@ -177,6 +177,7 @@ void init_framebuffer(int width, int height)
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, buffer_pbo);
 	glBufferStorage(GL_PIXEL_UNPACK_BUFFER, buffer_size * TEX_NUM, 0, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
 	buffer_data = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, buffer_size * TEX_NUM, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 }
 
 static inline unsigned get_alignment(unsigned pitch)
@@ -198,6 +199,7 @@ uint8_t *screen_get_texture_data()
 void screen_write(int width, int height)
 {
 	bool buffer_size_changed = tex_width[rotate_buffer] != width || tex_height[rotate_buffer] != height;
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, buffer_pbo);
 	char *offset = (char *)(rotate_buffer * buffer_size);
 	glBindTexture(GL_TEXTURE_2D, texture[rotate_buffer]);
 	// check if the framebuffer size has changed
@@ -231,7 +233,9 @@ void screen_write(int width, int height)
 	glDrawArrays(GL_TRIANGLES, 0, 3);
 	glBindVertexArray(0);
 	glBindProgramPipeline(0);
-	glBindFramebuffer(GL_FRAMEBUFFER, hw_render.get_current_framebuffer());
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindTexture(GL_TEXTURE_2D,0);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 	rotate_buffer = (rotate_buffer + 1) % TEX_NUM;
 }
 
