@@ -36,13 +36,6 @@ unsigned width, height;
 bool skip_swap_clear;
 static bool vk_initialized;
 
-#include <immintrin.h>
-
-inline unsigned long rotatel(unsigned long X, int C)
-{
-	return (X << C) | (X >> ((sizeof(long) * 8) - C));
-}
-
 static const unsigned cmd_len_lut[64] = {
 	1,
 	1,
@@ -110,133 +103,19 @@ static const unsigned cmd_len_lut[64] = {
 	1,
 };
 
-struct shader_id
-{
-	int fsid;
-	int vsid;
-	unsigned int pid;
-};
-#define TEX_NUM 3
-static GLuint vao = 0;
-static GLuint buffer_pbo;
-shader_id program = {0};
-static GLuint texture[TEX_NUM];
-static uint8_t *buffer_data;
-static uint32_t buffer_size = (640 * 8) * (480 * 8) * sizeof(uint32_t);
-int32_t tex_width[TEX_NUM];
-int32_t tex_height[TEX_NUM];
-static int rotate_buffer;
-
 #include <libretro.h>
 extern struct retro_hw_render_callback hw_render;
-#define SHADER_HEADER "#version 330 core\n"
-const GLchar *vert_shader =
-	SHADER_HEADER
-	"out vec2 uv;\n"
-	"void main(void) {\n"
-	"uv = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);\n"
-	"gl_Position = vec4(uv * vec2(2.0, -2.0) + vec2(-1.0, 1.0), 0.0, 1.0);\n"
-	"}\n";
-const GLchar *frag_shader =
-	SHADER_HEADER
-	"in vec2 uv;\n"
-	"layout(location = 0) out vec4 color;\n"
-	"uniform sampler2D tex0;\n"
-	"void main(void) {\n"
-	"color = texture(tex0, uv);\n"
-	"}\n";
 
-shader_id initShader(const char *vsh, const char *fsh)
+static void import_semaphore(GLuint &glsem, const Vulkan::ExternalHandle &handle)
 {
-	shader_id shad = {0};
-	shad.vsid = glCreateShaderProgramv(GL_VERTEX_SHADER, 1, &vsh);
-	shad.fsid = glCreateShaderProgramv(GL_FRAGMENT_SHADER, 1, &fsh);
-	glGenProgramPipelines(1, &shad.pid);
-	glBindProgramPipeline(shad.pid);
-	glUseProgramStages(shad.pid, GL_VERTEX_SHADER_BIT, shad.vsid);
-	glUseProgramStages(shad.pid, GL_FRAGMENT_SHADER_BIT, shad.fsid);
-	glBindProgramPipeline(0);
-	return shad;
-}
-
-void init_framebuffer(int width, int height)
-{
-	if (program.pid)
-		glDeleteProgramPipelines(1, &program.pid);
-	program = initShader(vert_shader, frag_shader);
-	glBindProgramPipeline(program.pid);
-	glGenVertexArrays(1, &vao);
-	glGenTextures(TEX_NUM, &texture[0]);
-	for (int i = 0; i < TEX_NUM; ++i)
-	{
-		glBindTexture(GL_TEXTURE_2D, texture[i]);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	}
-	glGenBuffers(1, &buffer_pbo);
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, buffer_pbo);
-	glBufferStorage(GL_PIXEL_UNPACK_BUFFER, buffer_size * TEX_NUM, 0, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
-	buffer_data = glMapBufferRange(GL_PIXEL_UNPACK_BUFFER, 0, buffer_size * TEX_NUM, GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-}
-
-static inline unsigned get_alignment(unsigned pitch)
-{
-	if (pitch & 1)
-		return 1;
-	if (pitch & 2)
-		return 2;
-	if (pitch & 4)
-		return 4;
-	return 8;
-}
-
-uint8_t *screen_get_texture_data()
-{
-	return buffer_data + (rotate_buffer * buffer_size);
-}
-
-void screen_write(int width, int height)
-{
-	bool buffer_size_changed = tex_width[rotate_buffer] != width || tex_height[rotate_buffer] != height;
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, buffer_pbo);
-	char *offset = (char *)(rotate_buffer * buffer_size);
-	glBindTexture(GL_TEXTURE_2D, texture[rotate_buffer]);
-	// check if the framebuffer size has changed
-	if (buffer_size_changed)
-	{
-		int retro_pitch = width * sizeof(uint32_t);
-		tex_width[rotate_buffer] = width;
-		tex_height[rotate_buffer] = height;
-		// set pitch for all unpacking operations
-		glPixelStorei(GL_UNPACK_ALIGNMENT, get_alignment(retro_pitch));
-		glPixelStorei(GL_UNPACK_ROW_LENGTH, retro_pitch);
-		// reallocate texture buffer on GPU
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, tex_width[rotate_buffer],
-					 tex_height[rotate_buffer], 0, GL_RGBA, GL_UNSIGNED_BYTE, offset);
-	}
-	else
-	{
-		// copy local buffer to GPU texture buffer
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, tex_width[rotate_buffer], tex_height[rotate_buffer],
-						GL_RGBA, GL_UNSIGNED_BYTE, offset);
-	}
-	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, hw_render.get_current_framebuffer());
-	glViewport(0,0,640,480);
-	glScissor(0,0,640,480);
-	glBindProgramPipeline(program.pid);
-	glActiveTexture(GL_TEXTURE0);
-	glClearColor(0.0, 0.0, 0.0, 1.0);
-	glClear(GL_COLOR_BUFFER_BIT);
-	glBindVertexArray(vao);
-	glDrawArrays(GL_TRIANGLES, 0, 3);
-	glBindVertexArray(0);
-	glBindProgramPipeline(0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glBindTexture(GL_TEXTURE_2D,0);
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-	rotate_buffer = (rotate_buffer + 1) % TEX_NUM;
+	glGenSemaphoresEXT(1, &glsem);
+#ifdef _WIN32
+	glImportSemaphoreWin32HandleEXT(glsem, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, handle.handle);
+	CloseHandle(handle.handle);
+#else
+	// Importing an FD takes ownership of it.
+	glImportSemaphoreFdEXT(glsem, GL_HANDLE_TYPE_OPAQUE_FD_EXT, handle.handle);
+#endif
 }
 
 void vk_blit(unsigned &width, unsigned &height)
@@ -251,25 +130,87 @@ void vk_blit(unsigned &width, unsigned &height)
 		opts.crop_rect.enable = true;
 		opts.vi.aa = true;
 		opts.downscale_steps = 2;
-
-		RDP::VIScanoutBuffer scanout;
-		frontend->scanout_async_buffer(scanout, opts);
-
-		if (!scanout.width || !scanout.height)
+		opts.export_scanout = true;
+		opts.export_handle_type = Vulkan::ExternalHandle::get_opaque_memory_handle_type();
+		Vulkan::ImageHandle image = frontend->scanout(opts);
+		if (!image)
 		{
 			width = 0;
 			height = 0;
 			return;
 		}
-		width = scanout.width;
-		height = scanout.height;
-		scanout.fence->wait();
-		uint8_t *color_data = screen_get_texture_data();
-		memcpy(color_data, device->map_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT),
-			   width * height * sizeof(uint32_t));
-		device->unmap_host_buffer(*scanout.buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
 
-		screen_write(width, height);
+		if (!image->get_width() || !image->get_height())
+		{
+			width = 0;
+			height = 0;
+			return;
+		}
+		auto exported_image = image->export_handle();
+		width = 640;
+		height = 480;
+
+		GLuint gltex;
+		GLuint glmem;
+		GLuint glfbo;
+
+		glCreateTextures(GL_TEXTURE_2D, 1, &gltex);
+		glCreateMemoryObjectsEXT(1, &glmem);
+		glCreateFramebuffers(1, &glfbo);
+		GLint gltrue = GL_TRUE;
+		glMemoryObjectParameterivEXT(glmem, GL_DEDICATED_MEMORY_OBJECT_EXT, &gltrue);
+		glImportMemoryWin32HandleEXT(glmem, image->get_allocation().get_size(),
+									 GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, exported_image.handle);
+		glTextureStorageMem2DEXT(gltex, 1, GL_RGBA8,
+								 GLsizei(image->get_width()),
+								 GLsizei(image->get_height()),
+								 glmem, 0);
+		glNamedFramebufferTexture(glfbo, GL_COLOR_ATTACHMENT0, gltex, 0);
+		{
+			// Exportable timeline is not widely supported sadly.
+			auto signal_semaphore = device->request_semaphore_external(
+				VK_SEMAPHORE_TYPE_BINARY_KHR,
+				Vulkan::ExternalHandle::get_opaque_semaphore_handle_type());
+
+			// scanout() already performed the barrier to EXTERNAL queue,
+			// so just submit a signal to the external semaphore.
+			device->submit_empty(Vulkan::CommandBuffer::Type::Generic, nullptr, signal_semaphore.get());
+			auto exported_signal = signal_semaphore->export_to_handle();
+
+			GLuint glsem;
+			import_semaphore(glsem, exported_signal);
+
+			// Wait. The layout matches whatever we used when releasing the image.
+			GLenum gllayout = GL_LAYOUT_SHADER_READ_ONLY_EXT;
+			glWaitSemaphoreEXT(glsem, 0, nullptr, 1, &gltex, &gllayout);
+			glDeleteSemaphoresEXT(1, &glsem);
+			glBlitNamedFramebuffer(glfbo, hw_render.get_current_framebuffer(),
+								   0, GLint(image->get_height()), GLint(image->get_width()), 0,
+								   0, 0, 640, 480, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+
+			{
+				auto wait_semaphore = device->request_semaphore_external(
+					VK_SEMAPHORE_TYPE_BINARY_KHR, Vulkan::ExternalHandle::get_opaque_semaphore_handle_type());
+				// Have to mark the semaphore is signalled since we assert on that being the case when exporting a semaphore.
+				wait_semaphore->signal_external();
+				auto exported_semaphore = wait_semaphore->export_to_handle();
+
+				GLuint glsem;
+				GLenum gllayout = GL_LAYOUT_SHADER_READ_ONLY_EXT;
+				import_semaphore(glsem, exported_semaphore);
+				glSignalSemaphoreEXT(glsem, 0, nullptr, 1, &gltex, &gllayout);
+
+				// Add the write-after-read barrier.
+				device->add_wait_semaphore(Vulkan::CommandBuffer::Type::Generic, std::move(wait_semaphore),
+										   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, true);
+
+				glDeleteSemaphoresEXT(1, &glsem);
+			}
+			glDeleteFramebuffers(1, &glfbo);
+			glDeleteTextures(1, &gltex);
+			glDeleteMemoryObjectsEXT(1, &glmem);
+			frontend->begin_frame_context();
+		}
 	}
 }
 
@@ -303,7 +244,7 @@ void vk_rasterize()
 		quirks.set_native_texture_lod(true);
 		quirks.set_native_resolution_tex_rect(true);
 		frontend->set_quirks(quirks);
-		frontend->begin_frame_context();
+
 		unsigned width = 0;
 		unsigned height = 0;
 		vk_blit(width, height);
@@ -311,6 +252,8 @@ void vk_rasterize()
 			screen_swap(true);
 		else
 			screen_swap(false);
+
+		frontend->begin_frame_context();
 	}
 }
 
@@ -400,22 +343,18 @@ void vk_destroy()
 	frontend.reset();
 	device.reset();
 	context.reset();
-	if (program.pid)
-		glDeleteProgramPipelines(1, &program.pid);
-	glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-	glDeleteTextures(TEX_NUM, &texture[0]);
-	glDeleteVertexArrays(1, &vao);
-	glDeleteBuffers(1, &buffer_pbo);
 }
 
 bool vk_init()
 {
 	running = false;
+	Vulkan::Context::SystemHandles handles = {};
 	context.reset(new Context);
 	device.reset(new Device);
 
 	if (!::Vulkan::Context::init_loader(nullptr))
 		return false;
+	context->set_system_handles(handles);
 	if (!context->init_instance_and_device(nullptr, 0, nullptr, 0))
 		return false;
 	device->set_context(*context);
@@ -433,7 +372,6 @@ bool vk_init()
 	quirks.set_native_texture_lod(true);
 	quirks.set_native_resolution_tex_rect(true);
 	frontend->set_quirks(quirks);
-	init_framebuffer(640, 480);
 	return true;
 }
 
