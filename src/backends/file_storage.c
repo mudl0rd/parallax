@@ -92,6 +92,7 @@ static size_t file_storage_size(const void* storage)
     return fstorage->size;
 }
 
+extern retro_log_printf_t log_cb;
 static void file_storage_save(void* storage, size_t start, size_t size)
 {
     

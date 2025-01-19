@@ -146,7 +146,7 @@ unsigned int* r4300_llbit(struct r4300_core* r4300);
 uint32_t* r4300_pc(struct r4300_core* r4300);
 struct precomp_instr** r4300_pc_struct(struct r4300_core* r4300);
 int* r4300_stop(struct r4300_core* r4300);
-
+void run_r4300(struct r4300_core* r4300);
 unsigned int get_r4300_emumode(struct r4300_core* r4300);
 
 /* Returns a pointer to a block of contiguous memory

@@ -150,6 +150,9 @@ static void n64DebugCallback(void *aContext, int aLevel, const char *aMessage)
 }
 
 extern m64p_rom_header ROM_HEADER;
+void update_variables(bool startup);
+extern void deinit_audio_libretro(void);
+extern void init_audio_libretro(unsigned max_audio_frames);
 
 static void setup_variables(void)
 {
@@ -162,7 +165,7 @@ static void setup_variables(void)
         {port, 1},
         {0, 0}};
 
-    environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void *)ports);
+    //environ_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void *)ports);
 }
 
 static void cleanup_global_paths()
@@ -247,6 +250,7 @@ void EmuThreadFunction()
 {
     if (initializing)
     {
+        extern void main_prerun(void);
         main_prerun();
         initializing = false;
     }
@@ -421,7 +425,7 @@ struct retro_hw_render_callback hw_render;
 static void context_reset(void)
 {
     fprintf(stderr, "Context reset!\n");
-    gladLoadGLLoader((GLADloadproc *)hw_render.get_proc_address);
+    gladLoadGLLoader((GLADloadproc)hw_render.get_proc_address);
 }
 
 static void context_destroy(void)
@@ -543,6 +547,8 @@ static void format_saved_memory(void)
     format_mempak(saved_memory.mempack + 2 * MEMPAK_SIZE);
     format_mempak(saved_memory.mempack + 3 * MEMPAK_SIZE);
 }
+
+
 
 bool retro_load_game(const struct retro_game_info *game)
 {

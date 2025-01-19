@@ -94,9 +94,9 @@ static void inputGetKeys_default_descriptor(void)
          independent_cbuttons_map(1)
          independent_cbuttons_map(2)
          independent_cbuttons_map(3)
-         NULL
+         0
       };
-      environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
+      environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, (struct retro_input_descriptor*)desc);
 }
 
 /* Mupen64Plus plugin functions */

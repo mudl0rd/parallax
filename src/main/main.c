@@ -62,6 +62,7 @@
 #include "device/pif/bootrom_hle.h"
 #include "eventloop.h"
 #include "main.h"
+#include "savestates.h"
 #include "callbacks.h"
 #include "plugin/plugin.h"
 #if defined(PROFILE)
